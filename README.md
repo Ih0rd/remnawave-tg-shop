@@ -45,12 +45,12 @@
 
 1.  **Клонируйте репозиторий:**
     ```bash
-    git clone https://github.com/machka-pasla/remnawave-tg-shop
+    git clone https://github.com/Ih0rd/remnawave-tg-shop
     cd remnawave-tg-shop
     ```
 
 2.  **Создайте и настройте файл `.env`:**
-    Скопируйте `env.example` в `.env` и заполните своими данными.
+    Скопируйте `.env.example` в `.env` и заполните своими данными.
     ```bash
     cp .env.example .env
     nano .env 
@@ -180,9 +180,48 @@
 
 ## 🐳 Docker
 
-Файлы `Dockerfile` и `docker-compose.yml` уже настроены для сборки и запуска проекта. `docker-compose.yml` использует готовый образ с GitHub Container Registry, но вы можете раскомментировать `build: .` для локальной сборки.
+Файлы `Dockerfile` и `docker-compose.yml` уже настроены для сборки и запуска проекта. `docker-compose.yml` использует фиксированный образ вашего форка `ghcr.io/ih0rd/remnawave-tg-shop:latest` (рекомендуемый прод-тег). Для локальной сборки можно раскомментировать `build: .`.
 
-Для автоматической публикации образов настроены GitHub Actions (`.github/workflows`). По умолчанию образы пушатся в GitHub Container Registry и Docker Hub. Добавьте в Secrets репозитория значения `DOCKERHUB_USERNAME` и `DOCKERHUB_TOKEN` (персональный access token или пароль для Docker Hub), чтобы загрузка в Docker Hub работала корректно.
+Для автоматической публикации образов настроены GitHub Actions (`.github/workflows`). Прод-публикация выполняется при пуше в ветку `save-tribute` и пушит образы в GitHub Container Registry и Docker Hub. Добавьте в Secrets репозитория значения `DOCKERHUB_USERNAME` и `DOCKERHUB_TOKEN` (персональный access token или пароль для Docker Hub), чтобы загрузка в Docker Hub работала корректно.
+
+## 🔁 Миграция с оригинального бота (версии до ноября 2025 включительно)
+
+Инструкция ниже рассчитана на миграцию с оригинального бота версии **не новее 2025-11-30**.
+
+1. **Проверьте текущую версию/коммит оригинального бота**
+   - Зафиксируйте commit hash или release tag, от которого мигрируете.
+   - Убедитесь, что дата этого коммита/релиза не позже **30 ноября 2025**.
+
+2. **Сделайте резервные копии перед переключением**
+   ```bash
+   docker compose exec remnawave-tg-shop-db pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" > backup_pre_fork.sql
+   cp .env .env.backup-pre-fork
+   ```
+
+3. **Переключите проект на ваш форк и ветку `save-tribute`**
+   ```bash
+   git remote set-url origin https://github.com/Ih0rd/remnawave-tg-shop.git
+   git fetch origin
+   git checkout save-tribute
+   ```
+
+4. **Обновите конфигурацию под форк**
+   - Убедитесь, что используется актуальный `docker-compose.yml` из ветки `save-tribute` (в нём уже зафиксирован образ `ghcr.io/ih0rd/remnawave-tg-shop:latest`).
+   - При необходимости обновите дополнительные переменные, появившиеся в форке (`TRIBUTE_*`, `PAYMENT_METHODS_ORDER`, `MY_DEVICES_SECTION_ENABLED`, `USER_EXTERNAL_SQUAD_UUID` и др.).
+
+5. **Перезапустите сервисы и примените миграции**
+   ```bash
+   docker compose pull
+   docker compose up -d
+   docker compose logs -f remnawave-tg-shop
+   ```
+   > Если контейнер бота не стартует из-за схемы БД, восстановите `backup_pre_fork.sql` во временную БД и сравните структуру перед повторным запуском.
+
+6. **Проверьте прод после миграции**
+   - webhook-и отвечают 2xx;
+   - создаётся тестовый пользователь;
+   - проходит тестовый платёж вашим основным провайдером;
+   - в админ-панели видны актуальные подписки и синхронизация.
 
 ## 📁 Структура проекта
 

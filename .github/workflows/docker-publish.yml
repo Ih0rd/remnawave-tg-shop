@@ -3,7 +3,7 @@ name: Build and Publish multi-arch Docker Image
 on:
   push:
     branches:
-      - main
+      - save-tribute
     tags:
       - 'v*.*.*'
     paths-ignore:
