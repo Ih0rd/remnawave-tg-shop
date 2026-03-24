@@ -590,15 +590,14 @@ async def addon_payment_methods_menu(
         await callback.answer(get_text("extra_devices_disabled"), show_alert=True)
         return
     stars_price = package["stars_prices"].get(months)
-    tribute_link = package.get("tribute_link")
     rows = []
     if stars_price is not None and settings.STARS_ENABLED:
         rows.append([InlineKeyboardButton(
             text=get_text("pay_with_stars_button") + f" · {stars_price}⭐",
             callback_data=f"pay_stars_addon:{package_key}:{months}:{stars_price}",
         )])
-    if tribute_link and settings.TRIBUTE_ENABLED:
-        rows.append([InlineKeyboardButton(text=get_text("pay_with_tribute_button"), url=tribute_link)])
+    # NOTE: extra-device add-ons are currently fulfilled only for Telegram Stars payments.
+    # Do not expose Tribute payment links here until a corresponding fulfillment flow exists.
     rows.append([InlineKeyboardButton(text=get_text("back_to_main_menu_button"), callback_data=f"addon_pkg:{package_key}")])
     await callback.message.edit_text(
         get_text("extra_devices_payment_method_title", months=months),
@@ -724,6 +723,7 @@ async def confirm_autorenew_handler(
     subscription_service: SubscriptionService,
     panel_service: PanelApiService,
     bot: Bot,
+    device_package_service: DevicePackageService,
 ):
     current_lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
     i18n: Optional[JsonI18n] = i18n_data.get("i18n_instance")
