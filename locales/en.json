@@ -501,5 +501,5 @@
   "extra_devices_payment_method_title": "Choose payment method for {months} months.",
   "extra_devices_invoice_title": "Extra devices for {months} months.",
   "extra_devices_purchase_success": "✅ Additional devices package is active until {end_date}.",
-  "extra_devices_expired_and_reset": "Your additional devices package has expired. Device limit was reset to the base value."
+  "extra_devices_expired_and_reset": "Your additional devices package has expired. Device limit was reset to the base value: {base_limit}."
 }

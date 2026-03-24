@@ -88,6 +88,19 @@ def _hwid_limit_disabled(max_devices_value: Optional[object]) -> bool:
         return False
 
 
+def _base_limit_label(settings: Settings, get_text) -> str:
+    value = settings.USER_HWID_DEVICE_LIMIT
+    if value is None:
+        return get_text("devices_unlimited_label")
+    try:
+        numeric = int(value)
+    except (TypeError, ValueError):
+        return str(value)
+    if numeric <= 0:
+        return get_text("devices_unlimited_label")
+    return str(numeric)
+
+
 async def display_subscription_options(event: Union[types.Message, types.CallbackQuery], i18n_data: dict, settings: Settings, session: AsyncSession):
     current_lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
     i18n: Optional[JsonI18n] = i18n_data.get("i18n_instance")
@@ -169,7 +182,12 @@ async def my_subscription_command_handler(
     await session.commit()
     if expired_count > 0:
         try:
-            await target.answer(get_text("extra_devices_expired_and_reset"))
+            await target.answer(
+                get_text(
+                    "extra_devices_expired_and_reset",
+                    base_limit=_base_limit_label(settings, get_text),
+                )
+            )
         except Exception:
             pass
     active = await subscription_service.get_active_subscription_details(session, event.from_user.id)
@@ -383,7 +401,12 @@ async def my_devices_command_handler(
     await session.commit()
     if expired_count > 0:
         try:
-            await target.answer(get_text("extra_devices_expired_and_reset"))
+            await target.answer(
+                get_text(
+                    "extra_devices_expired_and_reset",
+                    base_limit=_base_limit_label(settings, get_text),
+                )
+            )
         except Exception:
             pass
     active = await subscription_service.get_active_subscription_details(session, event.from_user.id)
@@ -622,7 +645,7 @@ async def addon_payment_methods_menu(
     if stars_price is not None and settings.STARS_ENABLED:
         rows.append([InlineKeyboardButton(
             text=get_text("pay_with_stars_button") + f" · {stars_price}⭐",
-            callback_data=f"pay_stars_addon:{package_key}:{months}:{stars_price}",
+            callback_data=f"pay_stars_addon:{package_key}:{months}",
         )])
     if tribute_link and settings.TRIBUTE_ENABLED:
         rows.append([InlineKeyboardButton(text=get_text("pay_with_tribute_button"), url=tribute_link)])

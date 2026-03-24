@@ -102,10 +102,16 @@ async def pay_stars_addon_callback_handler(
     if not callback.message:
         return
     try:
-        _, package_key, months_str, stars_price_str = callback.data.split(":")
+        _, package_key, months_str = callback.data.split(":")
         months = int(months_str)
-        stars_price = int(stars_price_str)
     except Exception:
+        await callback.answer(get_text("error_try_again"), show_alert=True)
+        return
+    package_cfg = settings.addon_device_packages.get(package_key)
+    stars_price = None
+    if package_cfg:
+        stars_price = package_cfg.get("stars_prices", {}).get(months)
+    if stars_price is None:
         await callback.answer(get_text("error_try_again"), show_alert=True)
         return
     try:
@@ -153,6 +159,21 @@ async def handle_successful_stars_payment(
             payment_db_id = int(payment_db_id_str)
             months = int(months_str)
             stars_amount = int(message.successful_payment.total_amount) if message.successful_payment else 0
+            payment_model = await payment_dal.get_payment_by_db_id(session, payment_db_id)
+            package_cfg = settings.addon_device_packages.get(package_key)
+            expected_stars = None
+            if package_cfg:
+                expected_stars = package_cfg.get("stars_prices", {}).get(months)
+            if (
+                not payment_model
+                or payment_model.user_id != message.from_user.id
+                or payment_model.status != "pending_stars"
+                or expected_stars is None
+                or int(payment_model.amount) != int(expected_stars)
+                or int(stars_amount) != int(expected_stars)
+            ):
+                await session.rollback()
+                return
             await payment_dal.update_provider_payment_and_status(
                 session, payment_db_id, message.successful_payment.provider_payment_charge_id, "succeeded"
             )
