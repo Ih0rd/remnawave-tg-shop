@@ -562,3 +562,132 @@ class PanelApiService:
         if response_data and not response_data.get("error") and "response" in response_data:
             return response_data.get("response")
         return None
+
+    async def get_top_traffic_entities(
+        self,
+        entity_type: str,
+        limit: int = 5,
+    ) -> List[Dict[str, Any]]:
+        """Best-effort fetch of top traffic entities (nodes/users) for admin dashboard."""
+        if entity_type not in {"nodes", "users"}:
+            return []
+
+        endpoint_candidates = [
+            f"/bandwidth-stats/{entity_type}/top",
+            f"/bandwidth-stats/{entity_type}",
+            f"/system/stats/{entity_type}",
+        ]
+        if entity_type == "users":
+            endpoint_candidates.append("/users")
+
+        for endpoint in endpoint_candidates:
+            response_data = await self._request("GET", endpoint, log_full_response=False)
+            if not response_data or response_data.get("error"):
+                continue
+            payload = response_data.get("response")
+            items = self._extract_top_traffic_items(payload, entity_type=entity_type, limit=limit)
+            if items:
+                return items
+        return []
+
+    def _extract_top_traffic_items(
+        self,
+        payload: Any,
+        entity_type: str,
+        limit: int,
+    ) -> List[Dict[str, Any]]:
+        if payload is None:
+            return []
+
+        candidates: List[Any] = []
+        if isinstance(payload, list):
+            candidates = payload
+        elif isinstance(payload, dict):
+            for key in (
+                "top",
+                "items",
+                "nodes",
+                "users",
+                "lastSevenDays",
+                "data",
+                "response",
+            ):
+                value = payload.get(key)
+                if isinstance(value, list):
+                    candidates = value
+                    break
+            if not candidates and entity_type == "nodes":
+                current = payload.get("current")
+                if isinstance(current, list):
+                    candidates = current
+
+        parsed: List[Dict[str, Any]] = []
+        for item in candidates:
+            if not isinstance(item, dict):
+                continue
+            name = (
+                item.get("nodeName")
+                or item.get("name")
+                or item.get("username")
+                or item.get("email")
+                or item.get("uuid")
+            )
+            traffic_raw = None
+            for traffic_key in (
+                "traffic",
+                "trafficUsed",
+                "usedTraffic",
+                "bandwidth",
+                "bytes",
+                "total",
+                "current",
+            ):
+                if traffic_key in item and item.get(traffic_key) is not None:
+                    traffic_raw = item.get(traffic_key)
+                    break
+            if name is None or traffic_raw is None:
+                continue
+            parsed.append(
+                {
+                    "name": str(name),
+                    "traffic_human": self._humanize_traffic_value(traffic_raw),
+                    "traffic_sort_value": self._traffic_sort_value(traffic_raw),
+                }
+            )
+
+        parsed.sort(key=lambda x: x["traffic_sort_value"], reverse=True)
+        return parsed[:limit]
+
+    def _humanize_traffic_value(self, value: Any) -> str:
+        if isinstance(value, (int, float)):
+            units = ["B", "KB", "MB", "GB", "TB", "PB"]
+            val = float(value)
+            idx = 0
+            while val >= 1024 and idx < len(units) - 1:
+                val /= 1024
+                idx += 1
+            return f"{val:.2f} {units[idx]}"
+        return str(value)
+
+    def _traffic_sort_value(self, value: Any) -> float:
+        if isinstance(value, (int, float)):
+            return float(value)
+        if not isinstance(value, str):
+            return 0.0
+
+        text = value.strip().upper().replace(",", ".")
+        match = re.match(r"^([0-9]+(?:\.[0-9]+)?)\s*([KMGTP]?B)?$", text)
+        if not match:
+            return 0.0
+
+        number = float(match.group(1))
+        unit = (match.group(2) or "B").upper()
+        multipliers = {
+            "B": 1,
+            "KB": 1024,
+            "MB": 1024**2,
+            "GB": 1024**3,
+            "TB": 1024**4,
+            "PB": 1024**5,
+        }
+        return number * multipliers.get(unit, 1)

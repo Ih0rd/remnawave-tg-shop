@@ -795,6 +795,7 @@ class SubscriptionService:
         hwid_limit = panel_user_data.get("hwidDeviceLimit")
         if hwid_limit is None:
             hwid_limit = self.settings.USER_HWID_DEVICE_LIMIT
+        hwid_limit_reason_code = self._extract_hwid_limit_reason(panel_user_data)
 
         return {
             "user_id": panel_user_data.get("uuid"),
@@ -806,7 +807,30 @@ class SubscriptionService:
             "user_bot_username": db_user.username,
             "is_panel_data": True,
             "max_devices": hwid_limit,
+            "hwid_limit_reason_code": hwid_limit_reason_code,
         }
+
+    def _extract_hwid_limit_reason(self, panel_user_data: Dict[str, Any]) -> Optional[str]:
+        candidates = []
+        for key in ("customRemark", "customRemarks", "remark", "remarks", "reason"):
+            value = panel_user_data.get(key)
+            if value is None:
+                continue
+            if isinstance(value, str):
+                candidates.append(value)
+            elif isinstance(value, list):
+                candidates.extend(str(item) for item in value if item is not None)
+            elif isinstance(value, dict):
+                candidates.extend(str(v) for v in value.values() if v is not None)
+            else:
+                candidates.append(str(value))
+
+        normalized = " ".join(candidates).lower()
+        if "hwidmaxdevicesexceeded" in normalized or "hwid_max_devices_exceeded" in normalized:
+            return "hwidmaxdevicesexceeded"
+        if "hwidnotsupported" in normalized or "hwid_not_supported" in normalized:
+            return "hwidnotsupported"
+        return None
 
     async def get_subscriptions_ending_soon(
         self, session: AsyncSession, days_threshold: int

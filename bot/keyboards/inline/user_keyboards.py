@@ -143,7 +143,7 @@ def get_payment_method_keyboard(months: int, price: float,
             builder.button(text=_("pay_with_tribute_button"), url=tribute_url)
         elif method == "stars" and settings.STARS_ENABLED and stars_price is not None:
             builder.button(
-                text=_("pay_with_stars_button"),
+                text=f"{_('pay_with_stars_button')} · {stars_price}⭐",
                 callback_data=f"pay_stars:{months}:{stars_price}",
             )
         elif method == "cryptopay" and settings.CRYPTOPAY_ENABLED:

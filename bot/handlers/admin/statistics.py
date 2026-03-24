@@ -130,6 +130,23 @@ async def show_statistics_handler(callback: types.CallbackQuery,
                 nodes_info = system_stats.get('nodes', {}) if system_stats else {}
                 total_online = nodes_info.get('totalOnline', 0)
                 stats_text_parts.append(f"🔗 {_('admin_panel_nodes_label', default='Активных нод')}: <b>{total_online}</b>")
+
+            # Top traffic entities (best effort: depends on panel API version/endpoints)
+            top_nodes = await panel_service.get_top_traffic_entities("nodes", limit=3)
+            if top_nodes:
+                stats_text_parts.append(f"\n<b>{_('admin_panel_top_nodes_traffic_header', default='🔥 Топ нод по трафику')}</b>")
+                for idx, item in enumerate(top_nodes, start=1):
+                    stats_text_parts.append(
+                        _("admin_panel_top_traffic_item", default="{index}. {name} — {traffic}", index=idx, name=item["name"], traffic=item["traffic_human"])
+                    )
+
+            top_users = await panel_service.get_top_traffic_entities("users", limit=3)
+            if top_users:
+                stats_text_parts.append(f"\n<b>{_('admin_panel_top_users_traffic_header', default='🔥 Топ пользователей по трафику')}</b>")
+                for idx, item in enumerate(top_users, start=1):
+                    stats_text_parts.append(
+                        _("admin_panel_top_traffic_item", default="{index}. {name} — {traffic}", index=idx, name=item["name"], traffic=item["traffic_human"])
+                    )
                 
     except Exception as e:
         logging.error(f"Failed to fetch panel statistics: {e}", exc_info=True)
