@@ -7,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.middlewares.i18n import JsonI18n
 from bot.services.stars_service import StarsService
+from bot.services.device_package_service import DevicePackageService
+from db.dal import payment_dal
 from config.settings import Settings
 
 router = Router(name="user_subscription_payments_stars_router")
@@ -86,6 +88,45 @@ async def pay_stars_callback_handler(
         pass
 
 
+@router.callback_query(F.data.startswith("pay_stars_addon:"))
+async def pay_stars_addon_callback_handler(
+    callback: types.CallbackQuery,
+    settings: Settings,
+    i18n_data: dict,
+    session: AsyncSession,
+    device_package_service: DevicePackageService,
+):
+    current_lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
+    i18n: Optional[JsonI18n] = i18n_data.get("i18n_instance")
+    get_text = (lambda key, **kwargs: i18n.gettext(current_lang, key, **kwargs) if i18n else key)
+    if not callback.message:
+        return
+    try:
+        _, package_key, months_str, stars_price_str = callback.data.split(":")
+        months = int(months_str)
+        stars_price = int(stars_price_str)
+    except Exception:
+        await callback.answer(get_text("error_try_again"), show_alert=True)
+        return
+    try:
+        payment_id = await device_package_service.create_stars_invoice(
+            session,
+            user_id=callback.from_user.id,
+            package_key=package_key,
+            months=months,
+            stars_price=stars_price,
+            description=get_text("extra_devices_invoice_title", months=months),
+        )
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        payment_id = None
+    if not payment_id:
+        await callback.answer(get_text("error_payment_gateway"), show_alert=True)
+        return
+    await callback.answer()
+
+
 @router.pre_checkout_query()
 async def handle_pre_checkout_query(query: types.PreCheckoutQuery):
     try:
@@ -102,9 +143,39 @@ async def handle_successful_stars_payment(
     i18n_data: dict,
     session: AsyncSession,
     stars_service: StarsService,
+    device_package_service: DevicePackageService,
 ):
     payload = (message.successful_payment.invoice_payload
                if message and message.successful_payment else "")
+    if (payload or "").startswith("addon:"):
+        try:
+            _, payment_db_id_str, package_key, months_str = payload.split(":")
+            payment_db_id = int(payment_db_id_str)
+            months = int(months_str)
+            stars_amount = int(message.successful_payment.total_amount) if message.successful_payment else 0
+            await payment_dal.update_provider_payment_and_status(
+                session, payment_db_id, message.successful_payment.provider_payment_charge_id, "succeeded"
+            )
+            expires_at = await device_package_service.activate_paid_package(
+                session,
+                user_id=message.from_user.id,
+                package_key=package_key,
+                months=months,
+                provider="telegram_stars",
+                payment_id=payment_db_id,
+            )
+            await session.commit()
+            if expires_at:
+                lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
+                i18n: Optional[JsonI18n] = i18n_data.get("i18n_instance")
+                _ = lambda key, **kwargs: i18n.gettext(lang, key, **kwargs) if i18n else key
+                await message.answer(
+                    _("extra_devices_purchase_success", end_date=expires_at.strftime("%Y-%m-%d"))
+                )
+        except Exception:
+            await session.rollback()
+        return
+
     try:
         payment_db_id_str, months_str = (payload or "").split(":", 1)
         payment_db_id = int(payment_db_id_str)

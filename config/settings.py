@@ -182,6 +182,39 @@ class Settings(BaseSettings):
         default=None,
         description="Default hardware device limit for panel users (0 = unlimited)"
     )
+    ADDON_DEVICES_PACKAGE_1: Optional[int] = Field(default=None)
+    ADDON_DEVICES_PACKAGE_2: Optional[int] = Field(default=None)
+    ADDON_DEVICES_PACKAGE_3: Optional[int] = Field(default=None)
+
+    ADDON_DEVICES_RUB_PRICE_PACKAGE_1_MONTH_1: Optional[int] = Field(default=None)
+    ADDON_DEVICES_RUB_PRICE_PACKAGE_1_MONTH_3: Optional[int] = Field(default=None)
+    ADDON_DEVICES_RUB_PRICE_PACKAGE_1_MONTH_6: Optional[int] = Field(default=None)
+    ADDON_DEVICES_RUB_PRICE_PACKAGE_1_MONTH_12: Optional[int] = Field(default=None)
+    ADDON_DEVICES_RUB_PRICE_PACKAGE_2_MONTH_1: Optional[int] = Field(default=None)
+    ADDON_DEVICES_RUB_PRICE_PACKAGE_2_MONTH_3: Optional[int] = Field(default=None)
+    ADDON_DEVICES_RUB_PRICE_PACKAGE_2_MONTH_6: Optional[int] = Field(default=None)
+    ADDON_DEVICES_RUB_PRICE_PACKAGE_2_MONTH_12: Optional[int] = Field(default=None)
+    ADDON_DEVICES_RUB_PRICE_PACKAGE_3_MONTH_1: Optional[int] = Field(default=None)
+    ADDON_DEVICES_RUB_PRICE_PACKAGE_3_MONTH_3: Optional[int] = Field(default=None)
+    ADDON_DEVICES_RUB_PRICE_PACKAGE_3_MONTH_6: Optional[int] = Field(default=None)
+    ADDON_DEVICES_RUB_PRICE_PACKAGE_3_MONTH_12: Optional[int] = Field(default=None)
+
+    ADDON_DEVICES_STARS_PRICE_PACKAGE_1_MONTH_1: Optional[int] = Field(default=None)
+    ADDON_DEVICES_STARS_PRICE_PACKAGE_1_MONTH_3: Optional[int] = Field(default=None)
+    ADDON_DEVICES_STARS_PRICE_PACKAGE_1_MONTH_6: Optional[int] = Field(default=None)
+    ADDON_DEVICES_STARS_PRICE_PACKAGE_1_MONTH_12: Optional[int] = Field(default=None)
+    ADDON_DEVICES_STARS_PRICE_PACKAGE_2_MONTH_1: Optional[int] = Field(default=None)
+    ADDON_DEVICES_STARS_PRICE_PACKAGE_2_MONTH_3: Optional[int] = Field(default=None)
+    ADDON_DEVICES_STARS_PRICE_PACKAGE_2_MONTH_6: Optional[int] = Field(default=None)
+    ADDON_DEVICES_STARS_PRICE_PACKAGE_2_MONTH_12: Optional[int] = Field(default=None)
+    ADDON_DEVICES_STARS_PRICE_PACKAGE_3_MONTH_1: Optional[int] = Field(default=None)
+    ADDON_DEVICES_STARS_PRICE_PACKAGE_3_MONTH_3: Optional[int] = Field(default=None)
+    ADDON_DEVICES_STARS_PRICE_PACKAGE_3_MONTH_6: Optional[int] = Field(default=None)
+    ADDON_DEVICES_STARS_PRICE_PACKAGE_3_MONTH_12: Optional[int] = Field(default=None)
+
+    ADDON_DEVICES_TRIBUTE_LINK_PACKAGE_1: Optional[str] = Field(default=None)
+    ADDON_DEVICES_TRIBUTE_LINK_PACKAGE_2: Optional[str] = Field(default=None)
+    ADDON_DEVICES_TRIBUTE_LINK_PACKAGE_3: Optional[str] = Field(default=None)
     
     # Inline mode thumbnail URLs
     INLINE_REFERRAL_THUMBNAIL_URL: str = Field(default="https://cdn-icons-png.flaticon.com/512/1077/1077114.png")
@@ -435,6 +468,35 @@ class Settings(BaseSettings):
 
     @computed_field
     @property
+    def addon_device_packages(self) -> Dict[str, Dict[str, Any]]:
+        pkg_map: Dict[str, Optional[int]] = {
+            "1": self.ADDON_DEVICES_PACKAGE_1,
+            "2": self.ADDON_DEVICES_PACKAGE_2,
+            "3": self.ADDON_DEVICES_PACKAGE_3,
+        }
+        result: Dict[str, Dict[str, Any]] = {}
+        months = (1, 3, 6, 12)
+        for key, devices in pkg_map.items():
+            if devices is None or devices <= 0:
+                continue
+            rub_prices = {
+                m: getattr(self, f"ADDON_DEVICES_RUB_PRICE_PACKAGE_{key}_MONTH_{m}")
+                for m in months
+            }
+            stars_prices = {
+                m: getattr(self, f"ADDON_DEVICES_STARS_PRICE_PACKAGE_{key}_MONTH_{m}")
+                for m in months
+            }
+            result[key] = {
+                "added_devices": devices,
+                "rub_prices": {m: p for m, p in rub_prices.items() if p is not None},
+                "stars_prices": {m: p for m, p in stars_prices.items() if p is not None},
+                "tribute_link": getattr(self, f"ADDON_DEVICES_TRIBUTE_LINK_PACKAGE_{key}", None),
+            }
+        return result
+
+    @computed_field
+    @property
     def payment_methods_order(self) -> List[str]:
         """
         Ordered list of payment providers to show in the subscription payment keyboard.
@@ -482,12 +544,28 @@ class Settings(BaseSettings):
             return None
         return v
     
-    @field_validator('USER_HWID_DEVICE_LIMIT', 'SEVERPAY_MID', 'SEVERPAY_LIFETIME_MINUTES', mode='before')
+    @field_validator(
+        'USER_HWID_DEVICE_LIMIT', 'SEVERPAY_MID', 'SEVERPAY_LIFETIME_MINUTES',
+        'ADDON_DEVICES_PACKAGE_1', 'ADDON_DEVICES_PACKAGE_2', 'ADDON_DEVICES_PACKAGE_3',
+        'ADDON_DEVICES_RUB_PRICE_PACKAGE_1_MONTH_1', 'ADDON_DEVICES_RUB_PRICE_PACKAGE_1_MONTH_3',
+        'ADDON_DEVICES_RUB_PRICE_PACKAGE_1_MONTH_6', 'ADDON_DEVICES_RUB_PRICE_PACKAGE_1_MONTH_12',
+        'ADDON_DEVICES_RUB_PRICE_PACKAGE_2_MONTH_1', 'ADDON_DEVICES_RUB_PRICE_PACKAGE_2_MONTH_3',
+        'ADDON_DEVICES_RUB_PRICE_PACKAGE_2_MONTH_6', 'ADDON_DEVICES_RUB_PRICE_PACKAGE_2_MONTH_12',
+        'ADDON_DEVICES_RUB_PRICE_PACKAGE_3_MONTH_1', 'ADDON_DEVICES_RUB_PRICE_PACKAGE_3_MONTH_3',
+        'ADDON_DEVICES_RUB_PRICE_PACKAGE_3_MONTH_6', 'ADDON_DEVICES_RUB_PRICE_PACKAGE_3_MONTH_12',
+        'ADDON_DEVICES_STARS_PRICE_PACKAGE_1_MONTH_1', 'ADDON_DEVICES_STARS_PRICE_PACKAGE_1_MONTH_3',
+        'ADDON_DEVICES_STARS_PRICE_PACKAGE_1_MONTH_6', 'ADDON_DEVICES_STARS_PRICE_PACKAGE_1_MONTH_12',
+        'ADDON_DEVICES_STARS_PRICE_PACKAGE_2_MONTH_1', 'ADDON_DEVICES_STARS_PRICE_PACKAGE_2_MONTH_3',
+        'ADDON_DEVICES_STARS_PRICE_PACKAGE_2_MONTH_6', 'ADDON_DEVICES_STARS_PRICE_PACKAGE_2_MONTH_12',
+        'ADDON_DEVICES_STARS_PRICE_PACKAGE_3_MONTH_1', 'ADDON_DEVICES_STARS_PRICE_PACKAGE_3_MONTH_3',
+        'ADDON_DEVICES_STARS_PRICE_PACKAGE_3_MONTH_6', 'ADDON_DEVICES_STARS_PRICE_PACKAGE_3_MONTH_12',
+        mode='before'
+    )
     @classmethod
     def validate_optional_int(cls, v):
         if isinstance(v, str):
             v = v.strip()
-            if not v:
+            if not v or v.lower() == "false":
                 return None
         return v
     

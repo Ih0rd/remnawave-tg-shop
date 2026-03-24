@@ -490,5 +490,15 @@
   "admin_ads_delete_confirm": "Вы уверены, что хотите удалить кампанию #{id}? Это действие необратимо.",
   "admin_ads_deleted_success": "Кампания удалена.",
   "admin_ads_not_found": "Кампания не найдена.",
-  "free_kassa_order_full": "Заказ №{order_id} от {date}\n\n"
+  "free_kassa_order_full": "Заказ №{order_id} от {date}\n\n",
+  "buy_extra_devices_button": "📱 Купить доп. устройства",
+  "extra_devices_disabled": "Пакеты дополнительных устройств отключены.",
+  "extra_devices_packages_title": "Выберите пакет дополнительных устройств:",
+  "extra_devices_package_button": "Пакет {package_no}: +{devices} устройств",
+  "extra_devices_periods_title": "Пакет на +{devices} устройств. Выберите срок:",
+  "extra_devices_period_button": "{months} мес. · {rub_price} RUB · {stars_price}⭐",
+  "extra_devices_payment_method_title": "Выберите способ оплаты на {months} мес.",
+  "extra_devices_invoice_title": "Доп. устройства на {months} мес.",
+  "extra_devices_purchase_success": "✅ Пакет дополнительных устройств активирован до {end_date}.",
+  "extra_devices_expired_and_reset": "Срок действия пакета дополнительных устройств закончился. Лимит устройств возвращен к базовому значению."
 }

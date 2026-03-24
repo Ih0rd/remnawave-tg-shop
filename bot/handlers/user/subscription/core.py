@@ -15,6 +15,7 @@ from bot.keyboards.inline.user_keyboards import (
 )
 from bot.services.subscription_service import SubscriptionService
 from bot.services.panel_api_service import PanelApiService
+from bot.services.device_package_service import DevicePackageService
 from bot.middlewares.i18n import JsonI18n
 from db.dal import subscription_dal, user_billing_dal
 from db.models import Subscription
@@ -139,6 +140,7 @@ async def my_subscription_command_handler(
     subscription_service: SubscriptionService,
     session: AsyncSession,
     bot: Bot,
+    device_package_service: DevicePackageService,
 ):
     target = event.message if isinstance(event, types.CallbackQuery) else event
     current_lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
@@ -154,6 +156,13 @@ async def my_subscription_command_handler(
         await target.answer(get_text("error_service_unavailable"))
         return
 
+    expired_count = await device_package_service.sync_expired_packages(session, event.from_user.id)
+    await session.commit()
+    if expired_count > 0:
+        try:
+            await target.answer(get_text("extra_devices_expired_and_reset"))
+        except Exception:
+            pass
     active = await subscription_service.get_active_subscription_details(session, event.from_user.id)
 
     if not active:
@@ -279,6 +288,13 @@ async def my_subscription_command_handler(
                     callback_data="main_action:my_devices",
                 )
             ])
+            if settings.addon_device_packages:
+                prepend_rows.append([
+                    InlineKeyboardButton(
+                        text=get_text("buy_extra_devices_button"),
+                        callback_data="main_action:buy_extra_devices",
+                    )
+                ])
 
         # 2) Auto-renew toggle (if supported and not tribute)
         if local_sub and local_sub.provider != "tribute" and settings.yookassa_autopayments_active:
@@ -332,6 +348,7 @@ async def my_devices_command_handler(
     subscription_service: SubscriptionService,
     session: AsyncSession,
     bot: Bot,
+    device_package_service: DevicePackageService,
 ):
     target = event.message if isinstance(event, types.CallbackQuery) else event
     current_lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
@@ -353,7 +370,13 @@ async def my_devices_command_handler(
             await target.answer(get_text("my_devices_feature_disabled"))
         return
 
-    # TODO: context?
+    expired_count = await device_package_service.sync_expired_packages(session, event.from_user.id)
+    await session.commit()
+    if expired_count > 0:
+        try:
+            await target.answer(get_text("extra_devices_expired_and_reset"))
+        except Exception:
+            pass
     active = await subscription_service.get_active_subscription_details(session, event.from_user.id)
     if not active or not active.get("user_id"):
         message = get_text("subscription_not_active")
@@ -486,6 +509,104 @@ async def my_devices_command_handler(
         await target.answer(text, reply_markup=markup)
 
 
+@router.callback_query(F.data == "main_action:buy_extra_devices")
+async def buy_extra_devices_menu(
+    callback: types.CallbackQuery,
+    settings: Settings,
+    i18n_data: dict,
+):
+    current_lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
+    i18n: Optional[JsonI18n] = i18n_data.get("i18n_instance")
+    get_text = lambda key, **kwargs: i18n.gettext(current_lang, key, **kwargs) if i18n else key
+    if not callback.message:
+        return
+    packages = settings.addon_device_packages
+    if not packages:
+        await callback.answer(get_text("extra_devices_disabled"), show_alert=True)
+        return
+    rows = []
+    for package_key, item in packages.items():
+        rows.append([InlineKeyboardButton(
+            text=get_text("extra_devices_package_button", package_no=package_key, devices=item["added_devices"]),
+            callback_data=f"addon_pkg:{package_key}",
+        )])
+    rows.append([InlineKeyboardButton(text=get_text("back_to_main_menu_button"), callback_data="main_action:my_subscription")])
+    await callback.message.edit_text(
+        get_text("extra_devices_packages_title"),
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("addon_pkg:"))
+async def addon_package_periods_menu(
+    callback: types.CallbackQuery,
+    settings: Settings,
+    i18n_data: dict,
+):
+    current_lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
+    i18n: Optional[JsonI18n] = i18n_data.get("i18n_instance")
+    get_text = lambda key, **kwargs: i18n.gettext(current_lang, key, **kwargs) if i18n else key
+    if not callback.message:
+        return
+    package_key = callback.data.split(":")[-1]
+    package = settings.addon_device_packages.get(package_key)
+    if not package:
+        await callback.answer(get_text("extra_devices_disabled"), show_alert=True)
+        return
+    rows = []
+    for months in (1, 3, 6, 12):
+        rub_price = package["rub_prices"].get(months)
+        stars_price = package["stars_prices"].get(months)
+        if rub_price is None and stars_price is None:
+            continue
+        rows.append([InlineKeyboardButton(
+            text=get_text("extra_devices_period_button", months=months, rub_price=rub_price or "-", stars_price=stars_price or "-"),
+            callback_data=f"addon_period:{package_key}:{months}",
+        )])
+    rows.append([InlineKeyboardButton(text=get_text("back_to_main_menu_button"), callback_data="main_action:buy_extra_devices")])
+    await callback.message.edit_text(
+        get_text("extra_devices_periods_title", devices=package["added_devices"]),
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("addon_period:"))
+async def addon_payment_methods_menu(
+    callback: types.CallbackQuery,
+    settings: Settings,
+    i18n_data: dict,
+):
+    current_lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
+    i18n: Optional[JsonI18n] = i18n_data.get("i18n_instance")
+    get_text = lambda key, **kwargs: i18n.gettext(current_lang, key, **kwargs) if i18n else key
+    if not callback.message:
+        return
+    _, package_key, months_str = callback.data.split(":")
+    months = int(months_str)
+    package = settings.addon_device_packages.get(package_key)
+    if not package:
+        await callback.answer(get_text("extra_devices_disabled"), show_alert=True)
+        return
+    stars_price = package["stars_prices"].get(months)
+    tribute_link = package.get("tribute_link")
+    rows = []
+    if stars_price is not None and settings.STARS_ENABLED:
+        rows.append([InlineKeyboardButton(
+            text=get_text("pay_with_stars_button") + f" · {stars_price}⭐",
+            callback_data=f"pay_stars_addon:{package_key}:{months}:{stars_price}",
+        )])
+    if tribute_link and settings.TRIBUTE_ENABLED:
+        rows.append([InlineKeyboardButton(text=get_text("pay_with_tribute_button"), url=tribute_link)])
+    rows.append([InlineKeyboardButton(text=get_text("back_to_main_menu_button"), callback_data=f"addon_pkg:{package_key}")])
+    await callback.message.edit_text(
+        get_text("extra_devices_payment_method_title", months=months),
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+    )
+    await callback.answer()
+
+
 @router.callback_query(F.data.startswith("disconnect_device:"))
 async def disconnect_device_handler(
     callback: types.CallbackQuery,
@@ -495,6 +616,7 @@ async def disconnect_device_handler(
     subscription_service: SubscriptionService,
     panel_service: PanelApiService,
     bot: Bot,
+    device_package_service: DevicePackageService,
 ):
     current_lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
     i18n: Optional[JsonI18n] = i18n_data.get("i18n_instance")
@@ -530,7 +652,7 @@ async def disconnect_device_handler(
         await callback.answer(get_text("device_disconnected"))
     except Exception:
         pass
-    await my_devices_command_handler(callback, i18n_data, settings, panel_service, subscription_service, session, bot)
+    await my_devices_command_handler(callback, i18n_data, settings, panel_service, subscription_service, session, bot, device_package_service)
 
 
 @router.callback_query(F.data.startswith("toggle_autorenew:"))
@@ -542,6 +664,7 @@ async def toggle_autorenew_handler(
     subscription_service: SubscriptionService,
     panel_service: PanelApiService,
     bot: Bot,
+    device_package_service: DevicePackageService,
 ):
     current_lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
     i18n: Optional[JsonI18n] = i18n_data.get("i18n_instance")
@@ -632,7 +755,7 @@ async def confirm_autorenew_handler(
             except Exception:
                 pass
             try:
-                await my_subscription_command_handler(callback, i18n_data, settings, panel_service, subscription_service, session, bot)
+                await my_subscription_command_handler(callback, i18n_data, settings, panel_service, subscription_service, session, bot, device_package_service)
             except Exception:
                 pass
             return
@@ -643,7 +766,7 @@ async def confirm_autorenew_handler(
         await callback.answer(get_text("subscription_autorenew_updated"))
     except Exception:
         pass
-    await my_subscription_command_handler(callback, i18n_data, settings, panel_service, subscription_service, session, bot)
+    await my_subscription_command_handler(callback, i18n_data, settings, panel_service, subscription_service, session, bot, device_package_service)
 
 
 @router.callback_query(F.data == "autorenew:cancel")
@@ -655,6 +778,7 @@ async def autorenew_cancel_from_webhook_button(
     subscription_service: SubscriptionService,
     panel_service: PanelApiService,
     bot: Bot,
+    device_package_service: DevicePackageService,
 ):
     current_lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
     i18n: Optional[JsonI18n] = i18n_data.get("i18n_instance")
@@ -681,7 +805,7 @@ async def autorenew_cancel_from_webhook_button(
         await callback.answer(get_text("subscription_autorenew_updated"))
     except Exception:
         pass
-    await my_subscription_command_handler(callback, i18n_data, settings, panel_service, subscription_service, session, bot)
+    await my_subscription_command_handler(callback, i18n_data, settings, panel_service, subscription_service, session, bot, device_package_service)
 
 
 @router.message(Command("connect"))
@@ -693,6 +817,7 @@ async def connect_command_handler(
     subscription_service: SubscriptionService,
     session: AsyncSession,
     bot: Bot,
+    device_package_service: DevicePackageService,
 ):
     logging.info(f"User {message.from_user.id} used /connect command.")
-    await my_subscription_command_handler(message, i18n_data, settings, panel_service, subscription_service, session, bot)
+    await my_subscription_command_handler(message, i18n_data, settings, panel_service, subscription_service, session, bot, device_package_service)

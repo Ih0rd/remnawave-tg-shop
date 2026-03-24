@@ -490,5 +490,15 @@
   "admin_ads_delete_confirm": "Are you sure you want to delete campaign #{id}? This action is irreversible.",
   "admin_ads_deleted_success": "Campaign deleted.",
   "admin_ads_not_found": "Campaign not found.",
-  "free_kassa_order_full": "Order #{order_id} from {date}\n\n"
+  "free_kassa_order_full": "Order #{order_id} from {date}\n\n",
+  "buy_extra_devices_button": "📱 Buy extra devices",
+  "extra_devices_disabled": "Additional device packages are disabled.",
+  "extra_devices_packages_title": "Choose an additional devices package:",
+  "extra_devices_package_button": "Package {package_no}: +{devices} devices",
+  "extra_devices_periods_title": "Package for +{devices} devices. Choose duration:",
+  "extra_devices_period_button": "{months} mo. · {rub_price} RUB · {stars_price}⭐",
+  "extra_devices_payment_method_title": "Choose payment method for {months} months.",
+  "extra_devices_invoice_title": "Extra devices for {months} months.",
+  "extra_devices_purchase_success": "✅ Additional devices package is active until {end_date}.",
+  "extra_devices_expired_and_reset": "Your additional devices package has expired. Device limit was reset to the base value."
 }

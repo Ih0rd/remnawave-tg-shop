@@ -15,6 +15,7 @@ from bot.services.panel_webhook_service import PanelWebhookService
 from bot.services.freekassa_service import FreeKassaService
 from bot.services.platega_service import PlategaService
 from bot.services.severpay_service import SeverPayService
+from bot.services.device_package_service import DevicePackageService
 
 
 def build_core_services(
@@ -25,6 +26,7 @@ def build_core_services(
     bot_username_for_default_return: str,
 ):
     panel_service = PanelApiService(settings)
+    device_package_service = DevicePackageService(settings, panel_service, bot, i18n)
     subscription_service = SubscriptionService(settings, panel_service, bot, i18n)
     referral_service = ReferralService(settings, subscription_service, bot, i18n)
     promo_code_service = PromoCodeService(settings, subscription_service, bot, i18n)
@@ -105,4 +107,5 @@ def build_core_services(
         "yookassa_service": yookassa_service,
         "platega_service": platega_service,
         "severpay_service": severpay_service,
+        "device_package_service": device_package_service,
     }
