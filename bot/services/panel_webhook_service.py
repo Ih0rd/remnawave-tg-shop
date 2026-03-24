@@ -240,7 +240,10 @@ class PanelWebhookService:
                 )
         elif event_name == "user.expired":
             # Check if this is a tribute user that should be auto-renewed (regardless of notification settings)
-            auto_renewed = await self._handle_expired_subscription(session, user_id, user_payload, lang, markup, first_name)
+            async with self.async_session_factory() as session:
+                auto_renewed = await self._handle_expired_subscription(
+                    session, user_id, user_payload, lang, markup, first_name
+                )
             
             # If auto-renewed via Tribute, suppress expiration notification. Otherwise, send it if enabled.
             if not auto_renewed and self.settings.SUBSCRIPTION_NOTIFY_ON_EXPIRE:

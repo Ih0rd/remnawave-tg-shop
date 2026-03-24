@@ -96,8 +96,8 @@ class TributeService:
             json.dumps(payload, ensure_ascii=False),
         )
 
-        # Tribute webhook spec: only two events are sent
-        # name: new_subscription | cancelled_subscription
+        # Tribute subscription webhook events:
+        # name: new_subscription | renewed_subscription | cancelled_subscription
         event_name = payload.get("name")
         data = payload.get("payload", {})
 
@@ -123,125 +123,21 @@ class TributeService:
             amount_float = 0.0
 
         async with async_session_factory() as session:
-            if event_name == "new_subscription":
-                # Use a unique, idempotent provider payment id per webhook event
-                # Prefer explicit event/payment identifiers if present; otherwise fall back to payload hash suffix
-                candidate_event_id = (
-                    str(data.get("event_id") or data.get("payment_id") or data.get("purchase_id") or data.get("invoice_id") or "")
-                )
-                if candidate_event_id:
-                    provider_payment_id = candidate_event_id
-                else:
-                    # Combine subscription_id (if any) with a stable hash of the raw payload to ensure uniqueness per event
-                    sub_id_part = str(data.get("subscription_id") or "sub")
-                    payload_hash = hashlib.sha256(raw_body).hexdigest()[:16]
-                    provider_payment_id = f"{sub_id_part}:{payload_hash}"
-
-                # Idempotent ensure payment
-                payment_record = await payment_dal.ensure_payment_with_provider_id(
-                    session,
+            if event_name in {"new_subscription", "renewed_subscription"}:
+                await self._handle_tribute_paid_subscription_event(
+                    session=session,
+                    raw_body=raw_body,
                     user_id=int(user_id),
-                    amount=amount_float,
-                    currency=currency,
                     months=months,
-                    description="Tribute subscription",
-                    provider="tribute",
-                    provider_payment_id=provider_payment_id,
+                    amount_float=float(amount_float),
+                    currency=currency,
+                    event_name=event_name,
+                    bot=bot,
+                    i18n=i18n,
+                    settings=settings,
+                    subscription_service=subscription_service,
+                    referral_service=referral_service,
                 )
-
-                activation_details = await subscription_service.activate_subscription(
-                    session,
-                    int(user_id),
-                    months,
-                    float(amount_float),
-                    payment_record.payment_id,
-                    provider="tribute",
-                )
-                referral_bonus = await referral_service.apply_referral_bonuses_for_payment(
-                    session,
-                    int(user_id),
-                    months,
-                    current_payment_db_id=payment_record.payment_id,
-                    skip_if_active_before_payment=False,
-                )
-                await session.commit()
-
-                db_user = await user_dal.get_user_by_id(session, int(user_id))
-                lang = db_user.language_code if db_user and db_user.language_code else settings.DEFAULT_LANGUAGE
-                _ = lambda k, **kw: i18n.gettext(lang, k, **kw)
-
-                applied_ref_days = referral_bonus.get('referee_bonus_applied_days') if referral_bonus else None
-                final_end = (referral_bonus.get('referee_new_end_date')
-                             if referral_bonus else None)
-                if not final_end:
-                    final_end = activation_details.get('end_date')
-
-                if final_end:
-                    config_link = activation_details.get("subscription_url") or _(
-                        "config_link_not_available"
-                    )
-
-                    if applied_ref_days:
-                        inviter_name_display = _('friend_placeholder')
-                        if db_user and db_user.referred_by_id:
-                            inviter = await user_dal.get_user_by_id(session, db_user.referred_by_id)
-                            if inviter:
-                                safe_name = sanitize_display_name(inviter.first_name) if inviter.first_name else None
-                                if safe_name:
-                                    inviter_name_display = safe_name
-                                elif inviter.username:
-                                    inviter_name_display = username_for_display(inviter.username, with_at=False)
-                        success_msg = _(
-                            "payment_successful_with_referral_bonus_full",
-                            months=months,
-                            base_end_date=activation_details["end_date"].strftime('%Y-%m-%d'),
-                            bonus_days=applied_ref_days,
-                            final_end_date=final_end.strftime('%Y-%m-%d'),
-                            inviter_name=inviter_name_display,
-                            config_link=config_link,
-                        )
-                    else:
-                        success_msg = _(
-                            "payment_successful_full",
-                            months=months,
-                            end_date=final_end.strftime('%Y-%m-%d'),
-                            config_link=config_link,
-                        )
-                    markup = get_connect_and_main_keyboard(
-                        lang,
-                        i18n,
-                        settings,
-                        config_link,
-                        preserve_message=True,
-                    )
-
-                    try:
-                        # Use user's DB language in success messages prepared above
-                        await bot.send_message(
-                            int(user_id),
-                            success_msg,
-                            reply_markup=markup,
-                            parse_mode="HTML",
-                            disable_web_page_preview=True,
-                        )
-                    except Exception as e:
-                        logging.error(
-                            f"Failed to send Tribute payment success message to user {user_id}: {e}")
-
-                # Send notification about payment
-                try:
-                    notification_service = NotificationService(bot, settings, i18n)
-                    user = await user_dal.get_user_by_id(session, int(user_id))
-                    await notification_service.notify_payment_received(
-                        user_id=int(user_id),
-                        amount=float(amount_float),
-                        currency=currency,
-                        months=months,
-                        payment_provider="tribute",
-                        username=user.username if user else None
-                    )
-                except Exception as e:
-                    logging.error(f"Failed to send tribute payment notification: {e}")
             elif event_name == "cancelled_subscription":
                 await self._handle_tribute_cancellation(session, int(user_id), bot, i18n)
                 
@@ -249,6 +145,152 @@ class TributeService:
                 await session.commit()
         # Acknowledge to Tribute that webhook was received and processed/accepted
         return ok({"event": event_name or "unknown"})
+
+    async def _handle_tribute_paid_subscription_event(
+        self,
+        session,
+        raw_body: bytes,
+        user_id: int,
+        months: int,
+        amount_float: float,
+        currency: str,
+        event_name: str,
+        bot: Bot,
+        i18n: JsonI18n,
+        settings: Settings,
+        subscription_service: SubscriptionService,
+        referral_service: ReferralService,
+    ) -> None:
+        """Handle new/renewed Tribute subscription events in an idempotent way."""
+        data = json.loads(raw_body.decode()).get("payload", {})
+        candidate_event_id = str(
+            data.get("event_id")
+            or data.get("payment_id")
+            or data.get("purchase_id")
+            or data.get("invoice_id")
+            or ""
+        )
+        if candidate_event_id:
+            provider_payment_id = candidate_event_id
+        else:
+            sub_id_part = str(data.get("subscription_id") or "sub")
+            payload_hash = hashlib.sha256(raw_body).hexdigest()[:16]
+            provider_payment_id = f"{sub_id_part}:{payload_hash}"
+
+        payment_record, created_new_payment = await payment_dal.ensure_payment_with_provider_id(
+            session,
+            user_id=user_id,
+            amount=amount_float,
+            currency=currency,
+            months=months,
+            description=f"Tribute subscription ({event_name})",
+            provider="tribute",
+            provider_payment_id=provider_payment_id,
+            return_created=True,
+        )
+
+        if not created_new_payment:
+            logging.info(
+                "Tribute webhook duplicate detected (provider_payment_id=%s, event=%s, user_id=%s). "
+                "Skipping activation/bonuses/notifications.",
+                provider_payment_id,
+                event_name,
+                user_id,
+            )
+            await session.commit()
+            return
+
+        activation_details = await subscription_service.activate_subscription(
+            session,
+            user_id,
+            months,
+            amount_float,
+            payment_record.payment_id,
+            provider="tribute",
+        )
+        referral_bonus = await referral_service.apply_referral_bonuses_for_payment(
+            session,
+            user_id,
+            months,
+            current_payment_db_id=payment_record.payment_id,
+            skip_if_active_before_payment=False,
+        )
+        await session.commit()
+
+        db_user = await user_dal.get_user_by_id(session, user_id)
+        lang = db_user.language_code if db_user and db_user.language_code else settings.DEFAULT_LANGUAGE
+        _ = lambda k, **kw: i18n.gettext(lang, k, **kw)
+
+        applied_ref_days = referral_bonus.get('referee_bonus_applied_days') if referral_bonus else None
+        final_end = (referral_bonus.get('referee_new_end_date')
+                     if referral_bonus else None)
+        if not final_end:
+            final_end = activation_details.get('end_date')
+
+        if final_end:
+            config_link = activation_details.get("subscription_url") or _(
+                "config_link_not_available"
+            )
+
+            if applied_ref_days:
+                inviter_name_display = _('friend_placeholder')
+                if db_user and db_user.referred_by_id:
+                    inviter = await user_dal.get_user_by_id(session, db_user.referred_by_id)
+                    if inviter:
+                        safe_name = sanitize_display_name(inviter.first_name) if inviter.first_name else None
+                        if safe_name:
+                            inviter_name_display = safe_name
+                        elif inviter.username:
+                            inviter_name_display = username_for_display(inviter.username, with_at=False)
+                success_msg = _(
+                    "payment_successful_with_referral_bonus_full",
+                    months=months,
+                    base_end_date=activation_details["end_date"].strftime('%Y-%m-%d'),
+                    bonus_days=applied_ref_days,
+                    final_end_date=final_end.strftime('%Y-%m-%d'),
+                    inviter_name=inviter_name_display,
+                    config_link=config_link,
+                )
+            else:
+                success_msg = _(
+                    "payment_successful_full",
+                    months=months,
+                    end_date=final_end.strftime('%Y-%m-%d'),
+                    config_link=config_link,
+                )
+            markup = get_connect_and_main_keyboard(
+                lang,
+                i18n,
+                settings,
+                config_link,
+                preserve_message=True,
+            )
+
+            try:
+                await bot.send_message(
+                    user_id,
+                    success_msg,
+                    reply_markup=markup,
+                    parse_mode="HTML",
+                    disable_web_page_preview=True,
+                )
+            except Exception as e:
+                logging.error(
+                    f"Failed to send Tribute payment success message to user {user_id}: {e}")
+
+        try:
+            notification_service = NotificationService(bot, settings, i18n)
+            user = await user_dal.get_user_by_id(session, user_id)
+            await notification_service.notify_payment_received(
+                user_id=user_id,
+                amount=amount_float,
+                currency=currency,
+                months=months,
+                payment_provider="tribute",
+                username=user.username if user else None
+            )
+        except Exception as e:
+            logging.error(f"Failed to send tribute payment notification: {e}")
 
     async def _handle_tribute_cancellation(self, session, user_id: int, bot: Bot, i18n: JsonI18n):
         """Handle tribute subscription cancellation - set subscription to 1 day grace period"""

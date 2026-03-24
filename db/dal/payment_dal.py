@@ -1,5 +1,5 @@
 import logging
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple, Union
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import update, func, and_
@@ -56,14 +56,19 @@ async def ensure_payment_with_provider_id(
         months: int,
         description: str,
         provider: str,
-        provider_payment_id: str) -> Payment:
+        provider_payment_id: str,
+        return_created: bool = False) -> Union[Payment, Tuple[Payment, bool]]:
     """Idempotently create a payment record for a provider event.
 
     If a payment with the same provider_payment_id already exists, returns it.
     Otherwise creates a new succeeded payment with provided data.
+
+    When return_created=True returns tuple: (payment, created_new).
     """
     existing = await get_payment_by_provider_payment_id(session, provider_payment_id)
     if existing:
+        if return_created:
+            return existing, False
         return existing
 
     payment_payload: Dict[str, Any] = {
@@ -76,7 +81,10 @@ async def ensure_payment_with_provider_id(
         "provider_payment_id": provider_payment_id,
         "provider": provider,
     }
-    return await create_payment_record(session, payment_payload)
+    created = await create_payment_record(session, payment_payload)
+    if return_created:
+        return created, True
+    return created
 
 
 async def get_payment_by_db_id(session: AsyncSession,

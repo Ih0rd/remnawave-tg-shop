@@ -54,6 +54,30 @@ class SubscriptionService:
         except Exception:
             return False
 
+    def _extract_traffic_used_bytes(self, panel_user_data: Dict[str, Any]) -> Optional[int]:
+        """
+        Extract consumed traffic from Remnawave payload with compatibility for different field names.
+        """
+        traffic_obj = panel_user_data.get("userTraffic")
+        if isinstance(traffic_obj, dict):
+            for key in ("usedTrafficBytes", "trafficUsedBytes"):
+                value = traffic_obj.get(key)
+                if value is not None:
+                    try:
+                        return int(value)
+                    except (TypeError, ValueError):
+                        logging.warning("Unable to parse userTraffic.%s=%r as int", key, value)
+
+        for key in ("usedTrafficBytes", "trafficUsedBytes"):
+            value = panel_user_data.get(key)
+            if value is not None:
+                try:
+                    return int(value)
+                except (TypeError, ValueError):
+                    logging.warning("Unable to parse %s=%r as int", key, value)
+
+        return None
+
     async def _notify_admin_panel_user_creation_failed(self, user_id: int):
         if not self.bot or not self.i18n or not self.settings.ADMIN_IDS:
             return
@@ -714,8 +738,7 @@ class SubscriptionService:
             update_payload_local = {}
             panel_status = panel_user_data.get("status", "UNKNOWN").upper()
             panel_expire_at_str = panel_user_data.get("expireAt")
-            traffic_stats = panel_user_data.get("userTraffic") or {}
-            panel_traffic_used = traffic_stats.get("usedTrafficBytes")
+            panel_traffic_used = self._extract_traffic_used_bytes(panel_user_data)
             panel_traffic_limit = panel_user_data.get("trafficLimitBytes")
             panel_sub_uuid_from_panel = panel_user_data.get(
                 "subscriptionUuid"
@@ -779,7 +802,7 @@ class SubscriptionService:
             "status_from_panel": panel_user_data.get("status", "UNKNOWN").upper(),
             "config_link": panel_user_data.get("subscriptionUrl"),
             "traffic_limit_bytes": panel_user_data.get("trafficLimitBytes"),
-            "traffic_used_bytes": (panel_user_data.get("userTraffic") or {}).get("usedTrafficBytes"),
+            "traffic_used_bytes": self._extract_traffic_used_bytes(panel_user_data),
             "user_bot_username": db_user.username,
             "is_panel_data": True,
             "max_devices": hwid_limit,
