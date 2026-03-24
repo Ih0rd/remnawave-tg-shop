@@ -632,15 +632,19 @@ class PanelApiService:
                 or item.get("email")
                 or item.get("uuid")
             )
-            traffic_raw = (
-                item.get("traffic")
-                or item.get("trafficUsed")
-                or item.get("usedTraffic")
-                or item.get("bandwidth")
-                or item.get("bytes")
-                or item.get("total")
-                or item.get("current")
-            )
+            traffic_raw = None
+            for traffic_key in (
+                "traffic",
+                "trafficUsed",
+                "usedTraffic",
+                "bandwidth",
+                "bytes",
+                "total",
+                "current",
+            ):
+                if traffic_key in item and item.get(traffic_key) is not None:
+                    traffic_raw = item.get(traffic_key)
+                    break
             if name is None or traffic_raw is None:
                 continue
             parsed.append(

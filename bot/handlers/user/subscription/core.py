@@ -22,16 +22,6 @@ from db.models import Subscription
 router = Router(name="user_subscription_core_router")
 
 
-PLATFORM_ICON_MAP = {
-    "android": "🤖",
-    "windows": "🪟",
-    "linux": "🐧",
-    "ios": "🍎",
-    "macos": "💻",
-    "other": "📱",
-}
-
-
 def _mask_hwid(value: Optional[str]) -> str:
     if not value:
         return "N/A"
@@ -426,7 +416,6 @@ async def my_devices_command_handler(
             hwid = device.get('hwid')
             created_at_str = _parse_created_at(created_at)
             platform_code = _normalize_platform(platform, user_agent)
-            device_icon = PLATFORM_ICON_MAP.get(platform_code, PLATFORM_ICON_MAP["other"])
             device_title = _build_device_title(
                 get_text,
                 device_model=device_model,
@@ -439,7 +428,6 @@ async def my_devices_command_handler(
             device_details = get_text(
                 "device_details",
                 index=index,
-                device_icon=device_icon,
                 device_title=device_title,
                 created_at_str=created_at_str,
                 user_agent=user_agent or "N/A",
@@ -467,7 +455,6 @@ async def my_devices_command_handler(
         user_agent = device.get("userAgent") or None
         os_version = device.get("osVersion") or None
         platform_code = _normalize_platform(platform, user_agent)
-        device_icon = PLATFORM_ICON_MAP.get(platform_code, PLATFORM_ICON_MAP["other"])
         device_title = _build_device_title(
             get_text,
             device_model=device_model,
@@ -478,7 +465,6 @@ async def my_devices_command_handler(
         )
         device_button_text = get_text(
             "disconnect_device_button",
-            device_icon=device_icon,
             device_title=device_title,
             index=index,
         )
