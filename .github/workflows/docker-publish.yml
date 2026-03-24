@@ -9,10 +9,6 @@ on:
     paths-ignore:
       - 'README.md'
 
-env:
-  GHCR_IMAGE: ghcr.io/${{ github.repository }}
-  DOCKERHUB_IMAGE: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}
-
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
@@ -43,6 +39,15 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Normalize image names to lowercase
+        id: image_names
+        run: |
+          echo "ghcr_image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          echo "dockerhub_image=docker.io/${DOCKERHUB_USERNAME,,}/${GITHUB_REPOSITORY_NAME,,}" >> "$GITHUB_OUTPUT"
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          GITHUB_REPOSITORY_NAME: ${{ github.event.repository.name }}
+
       - name: Build and push multi-arch Docker image
         uses: docker/build-push-action@v5
         with:
@@ -50,7 +55,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ${{ env.GHCR_IMAGE }}:latest
-            ${{ env.GHCR_IMAGE }}:${{ github.ref_name }}
-            ${{ env.DOCKERHUB_IMAGE }}:latest
-            ${{ env.DOCKERHUB_IMAGE }}:${{ github.ref_name }}
+            ${{ steps.image_names.outputs.ghcr_image }}:latest
+            ${{ steps.image_names.outputs.ghcr_image }}:${{ github.ref_name }}
+            ${{ steps.image_names.outputs.dockerhub_image }}:latest
+            ${{ steps.image_names.outputs.dockerhub_image }}:${{ github.ref_name }}
