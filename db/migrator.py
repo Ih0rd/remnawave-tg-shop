@@ -112,6 +112,31 @@ def _migration_0003_normalize_referral_codes(connection: Connection) -> None:
         )
     )
 
+
+def _migration_0004_add_user_device_packages(connection: Connection) -> None:
+    connection.execute(
+        text(
+            """
+            CREATE TABLE IF NOT EXISTS user_device_packages (
+                package_id SERIAL PRIMARY KEY,
+                user_id BIGINT NOT NULL REFERENCES users(user_id),
+                package_key VARCHAR NOT NULL,
+                months INTEGER NOT NULL,
+                added_devices INTEGER NOT NULL,
+                provider VARCHAR NOT NULL DEFAULT 'telegram_stars',
+                payment_id INTEGER NULL REFERENCES payments(payment_id),
+                starts_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                expires_at TIMESTAMPTZ NOT NULL,
+                is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                expiry_notified_at TIMESTAMPTZ NULL
+            )
+            """
+        )
+    )
+    connection.execute(text("CREATE INDEX IF NOT EXISTS idx_udp_user_id ON user_device_packages(user_id)"))
+    connection.execute(text("CREATE INDEX IF NOT EXISTS idx_udp_expires_at ON user_device_packages(expires_at)"))
+    connection.execute(text("CREATE INDEX IF NOT EXISTS idx_udp_is_active ON user_device_packages(is_active)"))
+
 MIGRATIONS: List[Migration] = [
     Migration(
         id="0001_add_channel_subscription_fields",
@@ -127,6 +152,11 @@ MIGRATIONS: List[Migration] = [
         id="0003_normalize_referral_codes",
         description="Normalize referral codes to uppercase for consistent lookups",
         upgrade=_migration_0003_normalize_referral_codes,
+    ),
+    Migration(
+        id="0004_add_user_device_packages",
+        description="Add purchased additional device packages storage",
+        upgrade=_migration_0004_add_user_device_packages,
     ),
 ]
 
