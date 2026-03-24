@@ -177,7 +177,7 @@ class TributeService:
             payload_hash = hashlib.sha256(raw_body).hexdigest()[:16]
             provider_payment_id = f"{sub_id_part}:{payload_hash}"
 
-        payment_record = await payment_dal.ensure_payment_with_provider_id(
+        payment_record, created_new_payment = await payment_dal.ensure_payment_with_provider_id(
             session,
             user_id=user_id,
             amount=amount_float,
@@ -186,7 +186,19 @@ class TributeService:
             description=f"Tribute subscription ({event_name})",
             provider="tribute",
             provider_payment_id=provider_payment_id,
+            return_created=True,
         )
+
+        if not created_new_payment:
+            logging.info(
+                "Tribute webhook duplicate detected (provider_payment_id=%s, event=%s, user_id=%s). "
+                "Skipping activation/bonuses/notifications.",
+                provider_payment_id,
+                event_name,
+                user_id,
+            )
+            await session.commit()
+            return
 
         activation_details = await subscription_service.activate_subscription(
             session,
