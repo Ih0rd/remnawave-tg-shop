@@ -57,6 +57,7 @@ def build_core_services(
         panel_service,
         subscription_service,
         referral_service,
+        device_package_service,
     )
     platega_service = PlategaService(
         bot=bot,

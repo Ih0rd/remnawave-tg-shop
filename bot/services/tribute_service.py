@@ -13,6 +13,7 @@ from bot.middlewares.i18n import JsonI18n
 from bot.services.subscription_service import SubscriptionService
 from bot.services.panel_api_service import PanelApiService
 from bot.services.referral_service import ReferralService
+from bot.services.device_package_service import DevicePackageService
 from .notification_service import NotificationService
 from bot.keyboards.inline.user_keyboards import get_connect_and_main_keyboard
 from db.dal import payment_dal, user_dal, subscription_dal
@@ -49,6 +50,7 @@ class TributeService:
         panel_service: PanelApiService,
         subscription_service: SubscriptionService,
         referral_service: ReferralService,
+        device_package_service: DevicePackageService,
     ):
         self.bot = bot
         self.settings = settings
@@ -57,6 +59,7 @@ class TributeService:
         self.panel_service = panel_service
         self.subscription_service = subscription_service
         self.referral_service = referral_service
+        self.device_package_service = device_package_service
 
     async def handle_webhook(self, raw_body: bytes, signature_header: Optional[str]) -> web.Response:
         settings = self.settings
@@ -65,6 +68,7 @@ class TributeService:
         async_session_factory = self.async_session_factory
         subscription_service = self.subscription_service
         referral_service = self.referral_service
+        device_package_service = self.device_package_service
 
         def ok(data: Optional[dict] = None) -> web.Response:
             payload = {"status": "ok"}
@@ -124,20 +128,37 @@ class TributeService:
 
         async with async_session_factory() as session:
             if event_name in {"new_subscription", "renewed_subscription"}:
-                await self._handle_tribute_paid_subscription_event(
-                    session=session,
-                    raw_body=raw_body,
-                    user_id=int(user_id),
-                    months=months,
-                    amount_float=float(amount_float),
-                    currency=currency,
-                    event_name=event_name,
-                    bot=bot,
-                    i18n=i18n,
-                    settings=settings,
-                    subscription_service=subscription_service,
-                    referral_service=referral_service,
-                )
+                addon_package_key = self._extract_addon_package_key(data)
+                if addon_package_key:
+                    await self._handle_tribute_paid_addon_event(
+                        session=session,
+                        raw_body=raw_body,
+                        user_id=int(user_id),
+                        months=months,
+                        amount_float=float(amount_float),
+                        currency=currency,
+                        event_name=event_name,
+                        package_key=addon_package_key,
+                        bot=bot,
+                        i18n=i18n,
+                        settings=settings,
+                        device_package_service=device_package_service,
+                    )
+                else:
+                    await self._handle_tribute_paid_subscription_event(
+                        session=session,
+                        raw_body=raw_body,
+                        user_id=int(user_id),
+                        months=months,
+                        amount_float=float(amount_float),
+                        currency=currency,
+                        event_name=event_name,
+                        bot=bot,
+                        i18n=i18n,
+                        settings=settings,
+                        subscription_service=subscription_service,
+                        referral_service=referral_service,
+                    )
             elif event_name == "cancelled_subscription":
                 await self._handle_tribute_cancellation(session, int(user_id), bot, i18n)
                 
@@ -145,6 +166,103 @@ class TributeService:
                 await session.commit()
         # Acknowledge to Tribute that webhook was received and processed/accepted
         return ok({"event": event_name or "unknown"})
+
+    def _extract_addon_package_key(self, data: dict) -> Optional[str]:
+        direct_candidates = (
+            data.get("addon_package_key"),
+            data.get("package_key"),
+            data.get("device_package_key"),
+        )
+        for value in direct_candidates:
+            if value in {"1", "2", "3"}:
+                return str(value)
+
+        metadata_candidates = (
+            data.get("metadata"),
+            data.get("meta"),
+            data.get("custom_fields"),
+            data.get("custom"),
+        )
+        for candidate in metadata_candidates:
+            parsed = candidate
+            if isinstance(candidate, str):
+                try:
+                    parsed = json.loads(candidate)
+                except Exception:
+                    parsed = None
+            if isinstance(parsed, dict):
+                for key in ("addon_package_key", "package_key", "device_package_key"):
+                    value = parsed.get(key)
+                    if value in {"1", "2", "3"}:
+                        return str(value)
+        return None
+
+    async def _handle_tribute_paid_addon_event(
+        self,
+        session,
+        raw_body: bytes,
+        user_id: int,
+        months: int,
+        amount_float: float,
+        currency: str,
+        event_name: str,
+        package_key: str,
+        bot: Bot,
+        i18n: JsonI18n,
+        settings: Settings,
+        device_package_service: DevicePackageService,
+    ) -> None:
+        data = json.loads(raw_body.decode()).get("payload", {})
+        candidate_event_id = str(
+            data.get("event_id")
+            or data.get("payment_id")
+            or data.get("purchase_id")
+            or data.get("invoice_id")
+            or ""
+        )
+        if candidate_event_id:
+            provider_payment_id = f"tribute_addon:{candidate_event_id}"
+        else:
+            payload_hash = hashlib.sha256(raw_body).hexdigest()[:16]
+            provider_payment_id = f"tribute_addon:{package_key}:{payload_hash}"
+
+        payment_record, created_new_payment = await payment_dal.ensure_payment_with_provider_id(
+            session,
+            user_id=user_id,
+            amount=amount_float,
+            currency=currency,
+            months=months,
+            description=f"Tribute addon package {package_key} ({event_name})",
+            provider="tribute",
+            provider_payment_id=provider_payment_id,
+            return_created=True,
+        )
+        if not created_new_payment:
+            await session.commit()
+            return
+
+        expires_at = await device_package_service.activate_paid_package(
+            session,
+            user_id=user_id,
+            package_key=package_key,
+            months=months,
+            provider="tribute",
+            payment_id=payment_record.payment_id,
+        )
+        await session.commit()
+        if not expires_at:
+            return
+
+        db_user = await user_dal.get_user_by_id(session, user_id)
+        lang = db_user.language_code if db_user and db_user.language_code else settings.DEFAULT_LANGUAGE
+        _ = lambda k, **kw: i18n.gettext(lang, k, **kw)
+        try:
+            await bot.send_message(
+                user_id,
+                _("extra_devices_purchase_success", end_date=expires_at.strftime('%Y-%m-%d')),
+            )
+        except Exception as e:
+            logging.error(f"Failed to send Tribute addon success message to user {user_id}: {e}")
 
     async def _handle_tribute_paid_subscription_event(
         self,
