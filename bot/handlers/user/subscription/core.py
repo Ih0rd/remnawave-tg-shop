@@ -22,6 +22,72 @@ from db.models import Subscription
 router = Router(name="user_subscription_core_router")
 
 
+PLATFORM_ICON_MAP = {
+    "android": "🤖",
+    "windows": "🪟",
+    "linux": "🐧",
+    "ios": "🍎",
+    "macos": "💻",
+    "other": "📱",
+}
+
+
+def _mask_hwid(value: Optional[str]) -> str:
+    if not value:
+        return "N/A"
+    cleaned = str(value).strip()
+    if len(cleaned) <= 8:
+        return cleaned
+    return f"{cleaned[:4]}…{cleaned[-4:]}"
+
+
+def _parse_created_at(created_at: Optional[str]) -> str:
+    if not created_at:
+        return "N/A"
+    try:
+        return datetime.fromisoformat(created_at).strftime("%d.%m.%Y %H:%M")
+    except Exception:
+        return "N/A"
+
+
+def _normalize_platform(platform: Optional[str], user_agent: Optional[str]) -> str:
+    value = (platform or "").strip().lower()
+    ua = (user_agent or "").lower()
+
+    if "android" in value or "android" in ua:
+        return "android"
+    if "windows" in value or "windows" in ua:
+        return "windows"
+    if value in {"ios", "iphone", "ipad"} or any(x in ua for x in ("iphone", "ipad", "ios")):
+        return "ios"
+    if value in {"macos", "mac os", "darwin", "mac"} or "mac os" in ua or "macintosh" in ua:
+        return "macos"
+    if "linux" in value or "linux" in ua:
+        return "linux"
+    return "other"
+
+
+def _build_device_title(
+    get_text,
+    device_model: Optional[str],
+    platform_code: str,
+    os_version: Optional[str],
+    user_agent: Optional[str],
+    index: int,
+) -> str:
+    platform_name = get_text(f"device_platform_name_{platform_code}")
+    if device_model:
+        base = device_model
+    elif user_agent:
+        base = user_agent[:42]
+    else:
+        base = get_text("device_generic_name", index=index)
+
+    if os_version:
+        return f"{base} ({platform_name} {os_version})"
+    return f"{base} ({platform_name})"
+
+
 async def display_subscription_options(event: Union[types.Message, types.CallbackQuery], i18n_data: dict, settings: Settings, session: AsyncSession):
     current_lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
     i18n: Optional[JsonI18n] = i18n_data.get("i18n_instance")
@@ -336,6 +402,21 @@ async def my_devices_command_handler(
     else:
         devices_list = []
         current_devices = len(devices.get('devices') or [])
+        max_devices_numeric: Optional[int] = None
+        if max_devices_value not in (None, 0):
+            try:
+                max_devices_numeric = int(max_devices_value)
+            except (TypeError, ValueError):
+                max_devices_numeric = None
+        is_hwid_limited = max_devices_numeric is not None and max_devices_numeric > 0
+        recommended_action = ""
+        if is_hwid_limited and current_devices >= max_devices_numeric:
+            recommended_action = get_text("devices_recommended_action_when_limit_reached")
+        hwid_reason_code = active.get("hwid_limit_reason_code")
+        hwid_reason_text = ""
+        if hwid_reason_code:
+            hwid_reason_text = get_text(f"hwid_limit_reason_{str(hwid_reason_code).lower()}")
+
         for index, device in enumerate(devices.get('devices') or [], start=1):
             device_model = device.get('deviceModel') or None
             platform = device.get('platform') or None
@@ -343,12 +424,37 @@ async def my_devices_command_handler(
             os_version = device.get('osVersion') or None
             created_at = device.get('createdAt')
             hwid = device.get('hwid')
-            created_at_str = datetime.fromisoformat(created_at).strftime("%d.%m.%Y %H:%M")
+            created_at_str = _parse_created_at(created_at)
+            platform_code = _normalize_platform(platform, user_agent)
+            device_icon = PLATFORM_ICON_MAP.get(platform_code, PLATFORM_ICON_MAP["other"])
+            device_title = _build_device_title(
+                get_text,
+                device_model=device_model,
+                platform_code=platform_code,
+                os_version=os_version,
+                user_agent=user_agent,
+                index=index,
+            )
 
-            device_details = get_text("device_details", index=index, device_model=device_model, platform=platform, os_version=os_version, created_at_str=created_at_str, user_agent=user_agent, hwid=hwid)
+            device_details = get_text(
+                "device_details",
+                index=index,
+                device_icon=device_icon,
+                device_title=device_title,
+                created_at_str=created_at_str,
+                user_agent=user_agent or "N/A",
+                hwid_masked=_mask_hwid(hwid),
+            )
             devices_list.append(device_details)
 
-        text = get_text("my_devices_details", devices="\n\n".join(devices_list), current_devices=current_devices, max_devices=max_devices_display)
+        text = get_text(
+            "my_devices_details",
+            devices="\n\n".join(devices_list),
+            current_devices=current_devices,
+            max_devices=max_devices_display,
+            recommended_action=(f"\n\n{recommended_action}" if recommended_action else ""),
+            hwid_reason=(f"\n\n{hwid_reason_text}" if hwid_reason_text else ""),
+        )
 
     base_markup = get_back_to_main_menu_markup(current_lang, i18n, callback_data="main_action:my_subscription")
     kb = base_markup.inline_keyboard
@@ -356,7 +462,26 @@ async def my_devices_command_handler(
     devices_kb = []
     for index, device in enumerate(devices.get('devices') or [], start=1):
         hwid = device.get('hwid')
-        device_button_text = get_text("disconnect_device_button", hwid=hwid, index=index)
+        device_model = device.get("deviceModel") or None
+        platform = device.get("platform") or None
+        user_agent = device.get("userAgent") or None
+        os_version = device.get("osVersion") or None
+        platform_code = _normalize_platform(platform, user_agent)
+        device_icon = PLATFORM_ICON_MAP.get(platform_code, PLATFORM_ICON_MAP["other"])
+        device_title = _build_device_title(
+            get_text,
+            device_model=device_model,
+            platform_code=platform_code,
+            os_version=os_version,
+            user_agent=user_agent,
+            index=index,
+        )
+        device_button_text = get_text(
+            "disconnect_device_button",
+            device_icon=device_icon,
+            device_title=device_title,
+            index=index,
+        )
 
         devices_kb.append([InlineKeyboardButton(text=device_button_text, callback_data=f"disconnect_device:{hwid}")])
     kb = devices_kb + kb
