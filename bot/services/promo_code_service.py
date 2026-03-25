@@ -10,6 +10,8 @@ from db.dal import promo_code_dal, user_dal
 from db.models import PromoCode, User
 
 from .subscription_service import SubscriptionService
+from .device_package_service import DevicePackageService
+from .squad_upgrade_service import SquadUpgradeService
 from bot.middlewares.i18n import JsonI18n
 from .notification_service import NotificationService
 
@@ -18,11 +20,15 @@ class PromoCodeService:
 
     def __init__(self, settings: Settings,
                  subscription_service: SubscriptionService, bot: Bot,
-                 i18n: JsonI18n):
+                 i18n: JsonI18n,
+                 device_package_service: DevicePackageService | None = None,
+                 squad_upgrade_service: SquadUpgradeService | None = None):
         self.settings = settings
         self.subscription_service = subscription_service
         self.bot = bot
         self.i18n = i18n
+        self.device_package_service = device_package_service
+        self.squad_upgrade_service = squad_upgrade_service
 
     async def apply_promo_code(
         self,
@@ -46,15 +52,58 @@ class PromoCodeService:
             return False, _("promo_code_already_used_by_user",
                             code=code_input_upper)
 
-        bonus_days = promo_data.bonus_days
+        promo_type = (promo_data.promo_type or "bonus_days").lower()
+        bonus_days = promo_data.bonus_days or 0
+        package_key = (promo_data.package_key or "").strip()
 
-        new_end_date = await self.subscription_service.extend_active_subscription_days(
-            session=session,
-            user_id=user_id,
-            bonus_days=bonus_days,
-            reason=f"promo code {code_input_upper}")
+        new_end_date: datetime | None = None
+        promo_result: datetime | str | None = None
+        if promo_type == "device_package":
+            if not self.device_package_service or not package_key:
+                logging.error(
+                    "Promo code %s has invalid package config: device_package_service=%s package_key=%s",
+                    code_input_upper,
+                    bool(self.device_package_service),
+                    package_key,
+                )
+                return False, _("error_applying_promo_bonus")
 
-        if new_end_date:
+            package_expires_at = await self.device_package_service.activate_paid_package(
+                session,
+                user_id=user_id,
+                package_key=package_key,
+                months=1,
+                provider="promo_code",
+                payment_id=None,
+            )
+            if package_expires_at:
+                promo_result = _("promo_code_applied_success_package", package_key=package_key, expires_at=package_expires_at.strftime("%d.%m.%Y %H:%M:%S"))
+            else:
+                promo_result = None
+        elif promo_type == "squad_upgrade":
+            if not self.squad_upgrade_service:
+                return False, _("error_applying_promo_bonus")
+            upgrade_expires_at = await self.squad_upgrade_service.activate_paid_upgrade(
+                session,
+                user_id=user_id,
+                months=1,
+                provider="promo_code",
+                payment_id=None,
+            )
+            if upgrade_expires_at:
+                promo_result = _("promo_code_applied_success_upgrade", expires_at=upgrade_expires_at.strftime("%d.%m.%Y %H:%M:%S"))
+            else:
+                promo_result = None
+        else:
+            new_end_date = await self.subscription_service.extend_active_subscription_days(
+                session=session,
+                user_id=user_id,
+                bonus_days=bonus_days,
+                reason=f"promo code {code_input_upper}",
+            )
+            promo_result = new_end_date
+
+        if promo_result:
             activation_recorded = await promo_code_dal.record_promo_activation(
                 session, promo_data.promo_code_id, user_id, payment_id=None)
             promo_incremented = await promo_code_dal.increment_promo_code_usage(
@@ -74,7 +123,7 @@ class PromoCodeService:
                 except Exception as e:
                     logging.error(f"Failed to send promo activation notification: {e}")
                 
-                return True, new_end_date
+                return True, promo_result
             else:
 
                 logging.error(

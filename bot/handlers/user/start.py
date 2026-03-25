@@ -21,6 +21,8 @@ from bot.services.subscription_service import SubscriptionService
 from bot.services.panel_api_service import PanelApiService
 from bot.services.referral_service import ReferralService
 from bot.services.promo_code_service import PromoCodeService
+from bot.services.device_package_service import DevicePackageService
+from bot.services.squad_upgrade_service import SquadUpgradeService
 from config.settings import Settings
 from bot.middlewares.i18n import JsonI18n
 from bot.utils.text_sanitizer import sanitize_username, sanitize_display_name
@@ -653,7 +655,9 @@ async def main_action_callback_handler(
         callback: types.CallbackQuery, state: FSMContext, settings: Settings,
         i18n_data: dict, bot: Bot, subscription_service: SubscriptionService,
         referral_service: ReferralService, panel_service: PanelApiService,
-        promo_code_service: PromoCodeService, session: AsyncSession):
+        promo_code_service: PromoCodeService, session: AsyncSession,
+        device_package_service: DevicePackageService,
+        squad_upgrade_service: SquadUpgradeService):
     action = callback.data.split(":")[1]
     user_id = callback.from_user.id
 
@@ -672,11 +676,19 @@ async def main_action_callback_handler(
     elif action == "my_subscription":
         await user_subscription_handlers.my_subscription_command_handler(
             callback, i18n_data, settings, panel_service, subscription_service,
-            session, bot)
+            session, bot, device_package_service, squad_upgrade_service)
     elif action == "my_devices":
         await user_subscription_handlers.my_devices_command_handler(
             callback, i18n_data, settings, panel_service, subscription_service,
-            session, bot)
+            session, bot, device_package_service)
+    elif action == "buy_extra_devices":
+        await user_subscription_handlers.buy_extra_devices_menu(
+            callback, settings, i18n_data, subscription_service, session
+        )
+    elif action == "buy_squad_upgrade":
+        await user_subscription_handlers.buy_squad_upgrade_menu(
+            callback, settings, i18n_data
+        )
     elif action == "referral":
         await user_referral_handlers.referral_command_handler(
             callback, settings, i18n_data, referral_service, bot, session)

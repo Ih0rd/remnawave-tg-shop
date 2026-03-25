@@ -1,5 +1,6 @@
 import logging
 import asyncio
+import contextlib
 from typing import Dict, Any, Optional
 
 from aiogram import Bot, Dispatcher
@@ -39,6 +40,7 @@ from bot.services.crypto_pay_service import CryptoPayService, cryptopay_webhook_
 from bot.handlers.user import payment as user_payment_webhook_module
 from bot.handlers.admin.sync_admin import perform_sync
 from bot.utils.message_queue import init_queue_manager
+from db.dal import user_device_package_dal, user_squad_upgrade_dal
 
 
 async def register_all_routers(dp: Dispatcher, settings: Settings):
@@ -53,6 +55,8 @@ async def on_startup_configured(dispatcher: Dispatcher):
     panel_service: PanelApiService = dispatcher["panel_service"]
 
     async_session_factory: sessionmaker = dispatcher["async_session_factory"]
+    device_package_service = dispatcher.get("device_package_service")
+    squad_upgrade_service = dispatcher.get("squad_upgrade_service")
 
     logging.info("STARTUP: on_startup_configured executing...")
 
@@ -170,11 +174,44 @@ async def on_startup_configured(dispatcher: Dispatcher):
     except Exception as e:
         logging.error(f"STARTUP: Failed to run automatic sync: {e}", exc_info=True)
 
+    # Background sweep for expired add-ons/upgrades
+    if device_package_service or squad_upgrade_service:
+        async def _addon_expiry_worker():
+            while True:
+                try:
+                    if device_package_service:
+                        async with async_session_factory() as session:
+                            user_ids = await user_device_package_dal.get_user_ids_with_expired_unhandled_packages(session)
+                        for user_id in user_ids:
+                            async with async_session_factory() as session:
+                                await device_package_service.process_expired_packages_and_notify(session, int(user_id))
+                    if squad_upgrade_service:
+                        async with async_session_factory() as session:
+                            user_ids = await user_squad_upgrade_dal.get_user_ids_with_expired_unhandled_upgrades(session)
+                        for user_id in user_ids:
+                            async with async_session_factory() as session:
+                                await squad_upgrade_service.process_expired_upgrades_and_notify(session, int(user_id))
+                except Exception:
+                    logging.exception("STARTUP: addon expiry worker iteration failed")
+                await asyncio.sleep(300)
+
+        dispatcher["addon_expiry_task"] = asyncio.create_task(
+            _addon_expiry_worker(),
+            name="AddonExpiryWorker",
+        )
+        logging.info("STARTUP: Addon expiry worker started.")
+
     logging.info("STARTUP: Bot on_startup_configured completed.")
 
 
 async def on_shutdown_configured(dispatcher: Dispatcher):
     logging.warning("SHUTDOWN: on_shutdown_configured executing...")
+
+    addon_expiry_task = dispatcher.get("addon_expiry_task")
+    if addon_expiry_task:
+        addon_expiry_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await addon_expiry_task
 
     async def close_service(key: str) -> None:
         service = dispatcher.get(key)

@@ -132,19 +132,23 @@ async def process_promo_code_input(message: types.Message, state: FSMContext,
                 f"Promo code '{code_input}' successfully applied for user {user.id}."
             )
 
-            new_end_date = result if isinstance(result, datetime) else None
-            active = await subscription_service.get_active_subscription_details(session, user.id)
-            config_link = active.get("config_link") if active else None
-            config_link = config_link or _("config_link_not_available")
+            if isinstance(result, datetime):
+                new_end_date = result
+                active = await subscription_service.get_active_subscription_details(session, user.id)
+                config_link = active.get("config_link") if active else None
+                config_link = config_link or _("config_link_not_available")
 
-            response_to_user_text = _(
-                "promo_code_applied_success_full",
-                end_date=(new_end_date.strftime("%d.%m.%Y %H:%M:%S") if new_end_date else "N/A"),
-                config_link=config_link,
-            )
-            reply_markup = get_connect_and_main_keyboard(
-                current_lang, i18n, settings, config_link
-            )
+                response_to_user_text = _(
+                    "promo_code_applied_success_full",
+                    end_date=(new_end_date.strftime("%d.%m.%Y %H:%M:%S") if new_end_date else "N/A"),
+                    config_link=config_link,
+                )
+                reply_markup = get_connect_and_main_keyboard(
+                    current_lang, i18n, settings, config_link
+                )
+            else:
+                response_to_user_text = str(result)
+                reply_markup = get_back_to_main_menu_markup(current_lang, i18n)
         else:
             await session.rollback()
             logging.info(
