@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from calendar import monthrange
 from typing import Optional, Dict, Any
+import logging
 
 from aiogram import Bot
 from aiogram.types import LabeledPrice
@@ -29,6 +30,24 @@ class DevicePackageService:
         self.bot = bot
         self.i18n = i18n
 
+    def _base_limit_label(self, lang: str) -> str:
+        value = self.settings.USER_HWID_DEVICE_LIMIT
+        unlimited_text = "unlimited"
+        if self.i18n:
+            try:
+                unlimited_text = self.i18n.gettext(lang, "devices_unlimited_label")
+            except Exception:
+                pass
+        if value is None:
+            return unlimited_text
+        try:
+            numeric = int(value)
+        except (TypeError, ValueError):
+            return str(value)
+        if numeric <= 0:
+            return unlimited_text
+        return str(numeric)
+
     async def get_effective_hwid_limit(self, session: AsyncSession, user_id: int) -> Optional[int]:
         base_limit = self.settings.USER_HWID_DEVICE_LIMIT
         if base_limit is None:
@@ -46,6 +65,32 @@ class DevicePackageService:
         await self._apply_limit_to_panel(session, user_id)
         await session.flush()
         return len(expired)
+
+    async def process_expired_packages_and_notify(self, session: AsyncSession, user_id: int) -> int:
+        expired_count = await self.sync_expired_packages(session, user_id)
+        if expired_count <= 0:
+            return 0
+        await session.commit()
+        db_user = await user_dal.get_user_by_id(session, user_id)
+        lang = self.settings.DEFAULT_LANGUAGE
+        if db_user and db_user.language_code:
+            lang = db_user.language_code
+        if self.i18n:
+            try:
+                text = self.i18n.gettext(
+                    lang,
+                    "extra_devices_expired_and_reset",
+                    base_limit=self._base_limit_label(lang),
+                )
+            except Exception:
+                text = "Your additional devices package has expired."
+        else:
+            text = "Your additional devices package has expired."
+        try:
+            await self.bot.send_message(user_id, text)
+        except Exception as e:
+            logging.error(f"Failed to send addon package expiry notification to user {user_id}: {e}")
+        return expired_count
 
     async def _apply_limit_to_panel(self, session: AsyncSession, user_id: int) -> bool:
         db_user = await user_dal.get_user_by_id(session, user_id)

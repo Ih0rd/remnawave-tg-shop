@@ -62,3 +62,17 @@ async def get_expired_unhandled_packages(session: AsyncSession, user_id: int) ->
     )
     result = await session.execute(stmt)
     return list(result.scalars().all())
+
+
+async def get_user_ids_with_expired_unhandled_packages(session: AsyncSession) -> List[int]:
+    now = datetime.now(timezone.utc)
+    stmt = (
+        select(UserDevicePackage.user_id)
+        .where(
+            UserDevicePackage.is_active.is_(True),
+            UserDevicePackage.expires_at <= now,
+        )
+        .distinct()
+    )
+    result = await session.execute(stmt)
+    return [int(row[0]) for row in result.all() if row and row[0] is not None]

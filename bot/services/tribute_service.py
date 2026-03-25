@@ -2,6 +2,7 @@ import logging
 import hmac
 import hashlib
 import json
+import re
 from typing import Optional
 
 from aiohttp import web
@@ -17,6 +18,8 @@ from bot.services.device_package_service import DevicePackageService
 from .notification_service import NotificationService
 from bot.keyboards.inline.user_keyboards import get_connect_and_main_keyboard
 from db.dal import payment_dal, user_dal, subscription_dal
+from db.models import UserDevicePackage
+from sqlalchemy import select
 from bot.utils.text_sanitizer import sanitize_display_name, username_for_display
 
 
@@ -127,14 +130,15 @@ class TributeService:
             amount_float = 0.0
 
         async with async_session_factory() as session:
-            if event_name in {"new_subscription", "renewed_subscription"}:
+            if event_name in {"new_subscription", "renewed_subscription", "new_digital_product"}:
                 addon_package_key = self._extract_addon_package_key(data)
                 if addon_package_key:
+                    addon_months = self._extract_addon_months(data, fallback=months)
                     await self._handle_tribute_paid_addon_event(
                         session=session,
                         raw_body=raw_body,
                         user_id=int(user_id),
-                        months=months,
+                        months=addon_months,
                         amount_float=float(amount_float),
                         currency=currency,
                         event_name=event_name,
@@ -159,6 +163,8 @@ class TributeService:
                         subscription_service=subscription_service,
                         referral_service=referral_service,
                     )
+            elif event_name == "digital_product_refunded":
+                await self._handle_tribute_addon_refund(session, data)
             elif event_name == "cancelled_subscription":
                 await self._handle_tribute_cancellation(session, int(user_id), bot, i18n)
                 
@@ -172,10 +178,12 @@ class TributeService:
             data.get("addon_package_key"),
             data.get("package_key"),
             data.get("device_package_key"),
+            data.get("product_id"),
         )
         for value in direct_candidates:
-            if value in {"1", "2", "3"}:
-                return str(value)
+            value_str = str(value) if value is not None else None
+            if value_str in {"1", "2", "3"}:
+                return value_str
 
         metadata_candidates = (
             data.get("metadata"),
@@ -193,9 +201,71 @@ class TributeService:
             if isinstance(parsed, dict):
                 for key in ("addon_package_key", "package_key", "device_package_key"):
                     value = parsed.get(key)
-                    if value in {"1", "2", "3"}:
-                        return str(value)
+                    value_str = str(value) if value is not None else None
+                    if value_str in {"1", "2", "3"}:
+                        return value_str
+
+        product_name = str(data.get("product_name") or "").lower()
+        if "пакет 1" in product_name or "package 1" in product_name:
+            return "1"
+        if "пакет 2" in product_name or "package 2" in product_name:
+            return "2"
+        if "пакет 3" in product_name or "package 3" in product_name:
+            return "3"
         return None
+
+    def _extract_addon_months(self, data: dict, fallback: int = 1) -> int:
+        direct_candidates = (
+            data.get("months"),
+            data.get("duration_months"),
+            data.get("period_months"),
+        )
+        for value in direct_candidates:
+            try:
+                parsed = int(value)
+                if parsed > 0:
+                    return parsed
+            except (TypeError, ValueError):
+                pass
+
+        period = data.get("period")
+        if isinstance(period, str):
+            return convert_period_to_months(period)
+
+        product_name = str(data.get("product_name") or "")
+        match = re.search(r"(\\d+)\\s*(месяц|месяца|месяцев|month|months|mo)", product_name.lower())
+        if match:
+            try:
+                parsed = int(match.group(1))
+                if parsed > 0:
+                    return parsed
+            except (TypeError, ValueError):
+                pass
+        return fallback if fallback > 0 else 1
+
+    async def _handle_tribute_addon_refund(self, session, data: dict) -> None:
+        purchase_id = data.get("purchase_id")
+        if purchase_id is None:
+            await session.commit()
+            return
+        provider_payment_id = f"tribute_addon:{purchase_id}"
+        payment = await payment_dal.get_payment_by_provider_payment_id(session, provider_payment_id)
+        if not payment:
+            await session.commit()
+            return
+        stmt = select(UserDevicePackage).where(
+            UserDevicePackage.payment_id == payment.payment_id,
+            UserDevicePackage.is_active.is_(True),
+        )
+        result = await session.execute(stmt)
+        packages = list(result.scalars().all())
+        if not packages:
+            await session.commit()
+            return
+        for package in packages:
+            package.is_active = False
+            package.expiry_notified_at = package.expiry_notified_at or package.expires_at
+        await session.commit()
 
     async def _handle_tribute_paid_addon_event(
         self,
