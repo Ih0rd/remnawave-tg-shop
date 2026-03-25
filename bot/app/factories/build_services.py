@@ -15,6 +15,8 @@ from bot.services.panel_webhook_service import PanelWebhookService
 from bot.services.freekassa_service import FreeKassaService
 from bot.services.platega_service import PlategaService
 from bot.services.severpay_service import SeverPayService
+from bot.services.device_package_service import DevicePackageService
+from bot.services.squad_upgrade_service import SquadUpgradeService
 
 
 def build_core_services(
@@ -25,9 +27,18 @@ def build_core_services(
     bot_username_for_default_return: str,
 ):
     panel_service = PanelApiService(settings)
+    device_package_service = DevicePackageService(settings, panel_service, bot, i18n)
+    squad_upgrade_service = SquadUpgradeService(settings, panel_service, bot, i18n)
     subscription_service = SubscriptionService(settings, panel_service, bot, i18n)
     referral_service = ReferralService(settings, subscription_service, bot, i18n)
-    promo_code_service = PromoCodeService(settings, subscription_service, bot, i18n)
+    promo_code_service = PromoCodeService(
+        settings,
+        subscription_service,
+        bot,
+        i18n,
+        device_package_service=device_package_service,
+        squad_upgrade_service=squad_upgrade_service,
+    )
     stars_service = StarsService(bot, settings, i18n, subscription_service, referral_service)
     cryptopay_service = CryptoPayService(
         settings.CRYPTOPAY_TOKEN,
@@ -55,6 +66,8 @@ def build_core_services(
         panel_service,
         subscription_service,
         referral_service,
+        device_package_service,
+        squad_upgrade_service,
     )
     platega_service = PlategaService(
         bot=bot,
@@ -105,4 +118,6 @@ def build_core_services(
         "yookassa_service": yookassa_service,
         "platega_service": platega_service,
         "severpay_service": severpay_service,
+        "device_package_service": device_package_service,
+        "squad_upgrade_service": squad_upgrade_service,
     }

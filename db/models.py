@@ -131,6 +131,44 @@ class UserBilling(Base):
 
     user = relationship("User")
 
+
+class UserDevicePackage(Base):
+    __tablename__ = "user_device_packages"
+
+    package_id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(BigInteger, ForeignKey("users.user_id"), nullable=False, index=True)
+    package_key = Column(String, nullable=False, index=True)
+    months = Column(Integer, nullable=False)
+    added_devices = Column(Integer, nullable=False)
+    provider = Column(String, nullable=False, default="telegram_stars")
+    payment_id = Column(Integer, ForeignKey("payments.payment_id"), nullable=True, index=True)
+    starts_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    is_active = Column(Boolean, default=True, index=True)
+    expiry_notified_at = Column(DateTime(timezone=True), nullable=True)
+
+    user = relationship("User")
+    payment = relationship("Payment")
+
+
+class UserSquadUpgrade(Base):
+    __tablename__ = "user_squad_upgrades"
+
+    upgrade_id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(BigInteger, ForeignKey("users.user_id"), nullable=False, index=True)
+    months = Column(Integer, nullable=False)
+    provider = Column(String, nullable=False, default="telegram_stars")
+    payment_id = Column(Integer, ForeignKey("payments.payment_id"), nullable=True, index=True)
+    from_squads = Column(Text, nullable=True)
+    to_squad_uuid = Column(String, nullable=False, index=True)
+    starts_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    is_active = Column(Boolean, default=True, index=True)
+    expiry_notified_at = Column(DateTime(timezone=True), nullable=True)
+
+    user = relationship("User")
+    payment = relationship("Payment")
+
 class UserPaymentMethod(Base):
     __tablename__ = "user_payment_methods"
 
@@ -154,7 +192,9 @@ class PromoCode(Base):
 
     promo_code_id = Column(Integer, primary_key=True, autoincrement=True)
     code = Column(String, unique=True, nullable=False, index=True)
-    bonus_days = Column(Integer, nullable=False)
+    promo_type = Column(String, nullable=False, default="bonus_days", index=True)
+    bonus_days = Column(Integer, nullable=False, default=0)
+    package_key = Column(String, nullable=True)
     max_activations = Column(Integer, nullable=False)
     current_activations = Column(Integer, default=0)
     is_active = Column(Boolean, default=True)

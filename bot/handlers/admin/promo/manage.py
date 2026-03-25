@@ -33,6 +33,15 @@ def get_promo_status_emoji_and_text(promo: PromoCode, i18n: JsonI18n, current_la
         return "🚫", _("admin_promo_status_inactive")
 
 
+def get_promo_benefit_text(promo: PromoCode, i18n: JsonI18n, current_lang: str) -> str:
+    _ = lambda key, **kwargs: i18n.gettext(current_lang, key, **kwargs)
+    if (promo.promo_type or "bonus_days") == "device_package":
+        return _("admin_promo_card_package_key", package_key=(promo.package_key or "N/A"))
+    if (promo.promo_type or "bonus_days") == "squad_upgrade":
+        return _("admin_promo_card_upgrade", default="🚀 Апгрейд подписки")
+    return _("admin_promo_card_bonus_days", days=promo.bonus_days)
+
+
 async def get_promo_detail_text_and_keyboard(promo_id: int, session: AsyncSession, i18n: JsonI18n, current_lang: str):
     _ = lambda key, **kwargs: i18n.gettext(current_lang, key, **kwargs)
     promo = await promo_code_dal.get_promo_code_by_id(session, promo_id)
@@ -49,7 +58,7 @@ async def get_promo_detail_text_and_keyboard(promo_id: int, session: AsyncSessio
 
     text = "\n".join([
         _("admin_promo_card_title", code=promo.code),
-        _("admin_promo_card_bonus_days", days=promo.bonus_days),
+        get_promo_benefit_text(promo, i18n, current_lang),
         _("admin_promo_card_activations", current=promo.current_activations, max=promo.max_activations),
         _("admin_promo_card_validity", validity=validity),
         _("admin_promo_card_status", status=status),
@@ -78,7 +87,7 @@ async def view_promo_codes_handler(callback: types.CallbackQuery, i18n_data: dic
     promo_models = await promo_code_dal.get_all_active_promo_codes(session, limit=20, offset=0)
     text = f"{_('admin_active_promos_list_header')}\n\n{_('admin_no_active_promos')}" if not promo_models else "\n".join(
         [_("admin_active_promos_list_header"), ""] + [
-            f"{get_promo_status_emoji_and_text(p, i18n, current_lang)[0]} <code>{p.code}</code> | 🎁 {p.bonus_days}д | 📊 {p.current_activations}/{p.max_activations} | ⏰ {p.valid_until.strftime('%d.%m.%Y') if p.valid_until else _('admin_promo_valid_indefinitely')}"
+            f"{get_promo_status_emoji_and_text(p, i18n, current_lang)[0]} <code>{p.code}</code> | {('📦 pkg ' + str(p.package_key)) if (p.promo_type or 'bonus_days') == 'device_package' else ('🚀 upgrade' if (p.promo_type or 'bonus_days') == 'squad_upgrade' else ('🎁 ' + str(p.bonus_days) + 'д'))} | 📊 {p.current_activations}/{p.max_activations} | ⏰ {p.valid_until.strftime('%d.%m.%Y') if p.valid_until else _('admin_promo_valid_indefinitely')}"
             for p in promo_models
         ]
     )
@@ -300,7 +309,7 @@ async def promo_export_all_handler(callback: types.CallbackQuery, i18n_data: dic
         # CSV headers (forced to English)
         writer.writerow([
             i18n.gettext(export_lang, "admin_promo_csv_code"),
-            i18n.gettext(export_lang, "admin_promo_csv_bonus_days"),
+            i18n.gettext(export_lang, "admin_promo_csv_benefit"),
             i18n.gettext(export_lang, "admin_promo_csv_max_activations"),
             i18n.gettext(export_lang, "admin_promo_csv_current_activations"),
             i18n.gettext(export_lang, "admin_promo_csv_status"),
@@ -317,7 +326,11 @@ async def promo_export_all_handler(callback: types.CallbackQuery, i18n_data: dic
             # Формируем данные для CSV
             row = [
                 promo.code,
-                promo.bonus_days,
+                (
+                    f"package:{promo.package_key}"
+                    if (promo.promo_type or "bonus_days") == "device_package"
+                    else ("upgrade" if (promo.promo_type or "bonus_days") == "squad_upgrade" else f"days:{promo.bonus_days}")
+                ),
                 promo.max_activations,
                 promo.current_activations,
                 status_text,

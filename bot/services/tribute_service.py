@@ -13,6 +13,8 @@ from bot.middlewares.i18n import JsonI18n
 from bot.services.subscription_service import SubscriptionService
 from bot.services.panel_api_service import PanelApiService
 from bot.services.referral_service import ReferralService
+from bot.services.device_package_service import DevicePackageService
+from bot.services.squad_upgrade_service import SquadUpgradeService
 from .notification_service import NotificationService
 from bot.keyboards.inline.user_keyboards import get_connect_and_main_keyboard
 from db.dal import payment_dal, user_dal, subscription_dal
@@ -49,6 +51,8 @@ class TributeService:
         panel_service: PanelApiService,
         subscription_service: SubscriptionService,
         referral_service: ReferralService,
+        device_package_service: DevicePackageService,
+        squad_upgrade_service: SquadUpgradeService,
     ):
         self.bot = bot
         self.settings = settings
@@ -57,6 +61,8 @@ class TributeService:
         self.panel_service = panel_service
         self.subscription_service = subscription_service
         self.referral_service = referral_service
+        self.device_package_service = device_package_service
+        self.squad_upgrade_service = squad_upgrade_service
 
     async def handle_webhook(self, raw_body: bytes, signature_header: Optional[str]) -> web.Response:
         settings = self.settings
@@ -65,6 +71,8 @@ class TributeService:
         async_session_factory = self.async_session_factory
         subscription_service = self.subscription_service
         referral_service = self.referral_service
+        device_package_service = self.device_package_service
+        squad_upgrade_service = self.squad_upgrade_service
 
         def ok(data: Optional[dict] = None) -> web.Response:
             payload = {"status": "ok"}
@@ -124,20 +132,52 @@ class TributeService:
 
         async with async_session_factory() as session:
             if event_name in {"new_subscription", "renewed_subscription"}:
-                await self._handle_tribute_paid_subscription_event(
-                    session=session,
-                    raw_body=raw_body,
-                    user_id=int(user_id),
-                    months=months,
-                    amount_float=float(amount_float),
-                    currency=currency,
-                    event_name=event_name,
-                    bot=bot,
-                    i18n=i18n,
-                    settings=settings,
-                    subscription_service=subscription_service,
-                    referral_service=referral_service,
-                )
+                addon_package_key = self._extract_addon_package_key(data)
+                if addon_package_key:
+                    addon_months = self._extract_addon_months(data, fallback=months)
+                    await self._handle_tribute_paid_addon_event(
+                        session=session,
+                        raw_body=raw_body,
+                        user_id=int(user_id),
+                        months=addon_months,
+                        amount_float=float(amount_float),
+                        currency=currency,
+                        event_name=event_name,
+                        package_key=addon_package_key,
+                        bot=bot,
+                        i18n=i18n,
+                        settings=settings,
+                        device_package_service=device_package_service,
+                    )
+                elif self._is_squad_upgrade_payment(data):
+                    await self._handle_tribute_paid_squad_upgrade_event(
+                        session=session,
+                        raw_body=raw_body,
+                        user_id=int(user_id),
+                        months=months,
+                        amount_float=float(amount_float),
+                        currency=currency,
+                        event_name=event_name,
+                        bot=bot,
+                        i18n=i18n,
+                        settings=settings,
+                        squad_upgrade_service=squad_upgrade_service,
+                    )
+                else:
+                    await self._handle_tribute_paid_subscription_event(
+                        session=session,
+                        raw_body=raw_body,
+                        user_id=int(user_id),
+                        months=months,
+                        amount_float=float(amount_float),
+                        currency=currency,
+                        event_name=event_name,
+                        bot=bot,
+                        i18n=i18n,
+                        settings=settings,
+                        subscription_service=subscription_service,
+                        referral_service=referral_service,
+                    )
             elif event_name == "cancelled_subscription":
                 await self._handle_tribute_cancellation(session, int(user_id), bot, i18n)
                 
@@ -145,6 +185,258 @@ class TributeService:
                 await session.commit()
         # Acknowledge to Tribute that webhook was received and processed/accepted
         return ok({"event": event_name or "unknown"})
+
+    def _extract_addon_package_key(self, data: dict) -> Optional[str]:
+        subscription_name = str(data.get("subscription_name") or "").strip().lower()
+
+        # Preferred explicit mapping by Tribute subscription_name marker from ENV
+        for package_key, package_cfg in self.settings.addon_device_packages.items():
+            configured_name = package_cfg.get("tribute_subscription_name")
+            if configured_name:
+                marker = str(configured_name).strip().lower()
+                if marker and marker in subscription_name:
+                    return str(package_key)
+
+        direct_candidates = (
+            data.get("addon_package_key"),
+            data.get("device_package_key"),
+        )
+        for value in direct_candidates:
+            value_str = str(value) if value is not None else None
+            if value_str in {"1", "2", "3"}:
+                return value_str
+
+        metadata_candidates = (
+            data.get("metadata"),
+            data.get("meta"),
+            data.get("custom_fields"),
+            data.get("custom"),
+        )
+        addon_scope_markers = {
+            "addon",
+            "addon_devices",
+            "device_package",
+            "devices_addon",
+        }
+        for candidate in metadata_candidates:
+            parsed = candidate
+            if isinstance(candidate, str):
+                try:
+                    parsed = json.loads(candidate)
+                except Exception:
+                    parsed = None
+            if isinstance(parsed, dict):
+                for key in ("addon_package_key", "device_package_key"):
+                    value = parsed.get(key)
+                    value_str = str(value) if value is not None else None
+                    if value_str in {"1", "2", "3"}:
+                        return value_str
+                scope_values = [
+                    parsed.get("payment_target"),
+                    parsed.get("target"),
+                    parsed.get("scope"),
+                    parsed.get("product_type"),
+                    parsed.get("subscription_type"),
+                ]
+                is_addon_scope = any(
+                    (str(v).strip().lower() in addon_scope_markers)
+                    for v in scope_values
+                    if v is not None
+                )
+                if is_addon_scope:
+                    generic = parsed.get("package_key")
+                    generic_str = str(generic) if generic is not None else None
+                    if generic_str in {"1", "2", "3"}:
+                        return generic_str
+        return None
+
+    def _extract_addon_months(self, data: dict, fallback: int = 1) -> int:
+        direct_candidates = (
+            data.get("months"),
+            data.get("duration_months"),
+            data.get("period_months"),
+        )
+        for value in direct_candidates:
+            try:
+                parsed = int(value)
+                if parsed > 0:
+                    return parsed
+            except (TypeError, ValueError):
+                pass
+
+        period = data.get("period")
+        if isinstance(period, str):
+            return convert_period_to_months(period)
+
+        return fallback if fallback > 0 else 1
+
+    def _is_squad_upgrade_payment(self, data: dict) -> bool:
+        offer = self.settings.squad_upgrade_offer or {}
+        configured_name = str(offer.get("tribute_subscription_name") or "").strip().lower()
+        subscription_name = str(data.get("subscription_name") or "").strip().lower()
+        if configured_name and configured_name in subscription_name:
+            return True
+
+        metadata_candidates = (
+            data.get("metadata"),
+            data.get("meta"),
+            data.get("custom_fields"),
+            data.get("custom"),
+        )
+        for candidate in metadata_candidates:
+            parsed = candidate
+            if isinstance(candidate, str):
+                try:
+                    parsed = json.loads(candidate)
+                except Exception:
+                    parsed = None
+            if isinstance(parsed, dict):
+                target = str(parsed.get("payment_target") or parsed.get("target") or "").strip().lower()
+                if target in {"squad_upgrade", "upgrade"}:
+                    return True
+        return False
+
+    async def _handle_tribute_paid_addon_event(
+        self,
+        session,
+        raw_body: bytes,
+        user_id: int,
+        months: int,
+        amount_float: float,
+        currency: str,
+        event_name: str,
+        package_key: str,
+        bot: Bot,
+        i18n: JsonI18n,
+        settings: Settings,
+        device_package_service: DevicePackageService,
+    ) -> None:
+        data = json.loads(raw_body.decode()).get("payload", {})
+        candidate_event_id = str(
+            data.get("event_id")
+            or data.get("payment_id")
+            or data.get("purchase_id")
+            or data.get("invoice_id")
+            or ""
+        )
+        if candidate_event_id:
+            provider_payment_id = f"tribute_addon:{candidate_event_id}"
+        else:
+            payload_hash = hashlib.sha256(raw_body).hexdigest()[:16]
+            provider_payment_id = f"tribute_addon:{package_key}:{payload_hash}"
+
+        payment_record, created_new_payment = await payment_dal.ensure_payment_with_provider_id(
+            session,
+            user_id=user_id,
+            amount=amount_float,
+            currency=currency,
+            months=months,
+            description=f"Tribute addon package {package_key} ({event_name})",
+            provider="tribute",
+            provider_payment_id=provider_payment_id,
+            return_created=True,
+        )
+        if not created_new_payment:
+            await session.commit()
+            return
+
+        expires_at = await device_package_service.activate_paid_package(
+            session,
+            user_id=user_id,
+            package_key=package_key,
+            months=months,
+            provider="tribute",
+            payment_id=payment_record.payment_id,
+        )
+        await session.commit()
+        if not expires_at:
+            return
+
+        db_user = await user_dal.get_user_by_id(session, user_id)
+        lang = db_user.language_code if db_user and db_user.language_code else settings.DEFAULT_LANGUAGE
+        _ = lambda k, **kw: i18n.gettext(lang, k, **kw)
+        try:
+            await bot.send_message(
+                user_id,
+                _("extra_devices_purchase_success", end_date=expires_at.strftime('%Y-%m-%d')),
+            )
+        except Exception as e:
+            logging.error(f"Failed to send Tribute addon success message to user {user_id}: {e}")
+        try:
+            notification_service = NotificationService(bot, settings, i18n)
+            user = await user_dal.get_user_by_id(session, user_id)
+            await notification_service.notify_payment_received(
+                user_id=user_id,
+                amount=amount_float,
+                currency=currency,
+                months=months,
+                payment_provider="tribute-addon",
+                username=user.username if user else None,
+            )
+        except Exception as e:
+            logging.error(f"Failed to send tribute addon payment notification: {e}")
+
+    async def _handle_tribute_paid_squad_upgrade_event(
+        self,
+        session,
+        raw_body: bytes,
+        user_id: int,
+        months: int,
+        amount_float: float,
+        currency: str,
+        event_name: str,
+        bot: Bot,
+        i18n: JsonI18n,
+        settings: Settings,
+        squad_upgrade_service: SquadUpgradeService,
+    ) -> None:
+        data = json.loads(raw_body.decode()).get("payload", {})
+        candidate_event_id = str(
+            data.get("event_id")
+            or data.get("payment_id")
+            or data.get("purchase_id")
+            or data.get("invoice_id")
+            or ""
+        )
+        provider_payment_id = (
+            f"tribute_upgrade:{candidate_event_id}"
+            if candidate_event_id
+            else f"tribute_upgrade:{hashlib.sha256(raw_body).hexdigest()[:16]}"
+        )
+        payment_record, created_new_payment = await payment_dal.ensure_payment_with_provider_id(
+            session,
+            user_id=user_id,
+            amount=amount_float,
+            currency=currency,
+            months=months,
+            description=f"Tribute squad upgrade ({event_name})",
+            provider="tribute",
+            provider_payment_id=provider_payment_id,
+            return_created=True,
+        )
+        if not created_new_payment:
+            await session.commit()
+            return
+        expires_at = await squad_upgrade_service.activate_paid_upgrade(
+            session,
+            user_id=user_id,
+            months=months,
+            provider="tribute",
+            payment_id=payment_record.payment_id,
+        )
+        await session.commit()
+        if not expires_at:
+            return
+        db_user = await user_dal.get_user_by_id(session, user_id)
+        lang = db_user.language_code if db_user and db_user.language_code else settings.DEFAULT_LANGUAGE
+        _ = lambda k, **kw: i18n.gettext(lang, k, **kw)
+        try:
+            await bot.send_message(
+                user_id,
+                _("squad_upgrade_purchase_success", end_date=expires_at.strftime('%Y-%m-%d')),
+            )
+        except Exception as e:
+            logging.error(f"Failed to send Tribute squad upgrade success message to user {user_id}: {e}")
 
     async def _handle_tribute_paid_subscription_event(
         self,
