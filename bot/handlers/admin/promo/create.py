@@ -494,11 +494,21 @@ async def create_promo_code_final(callback_or_message,
 
     try:
         data = await state.get_data()
-        code = data.get("promo_code") or _("admin_promo_code_missing_fallback", default="UNKNOWN")
+        code = data.get("promo_code")
+        if not code:
+            logging.error("Promo creation aborted: missing promo_code in FSM state")
+            error_text = _("error_occurred_try_again", default="❌ Произошла ошибка. Попробуйте снова.")
+            if hasattr(callback_or_message, 'message'):  # CallbackQuery
+                await callback_or_message.message.answer(error_text)
+                await callback_or_message.answer()
+            else:  # Message
+                await callback_or_message.answer(error_text)
+            await state.clear()
+            return
         promo_type = data.get("promo_type", "bonus_days")
         bonus_days = int(data.get("bonus_days", 0) or 0)
         package_key = data.get("package_key")
-        package_key_display = package_key or _("admin_promo_value_missing_fallback", default="N/A")
+        package_key_display = package_key or "N/A"
         max_activations = int(data.get("max_activations", 0) or 0)
         if max_activations <= 0:
             max_activations = 1
@@ -552,9 +562,9 @@ async def create_promo_code_final(callback_or_message,
                    "📊 Макс. активаций: <b>{max_activations}</b>\n"
                    "⏰ Срок действия: <b>{valid_until_str}</b>",
             code=code,
-            benefit_line=benefit_line or _("admin_promo_value_missing_fallback", default="N/A"),
+            benefit_line=benefit_line or "N/A",
             max_activations=max_activations,
-            valid_until_str=valid_until_str or _("admin_promo_value_missing_fallback", default="N/A"),
+            valid_until_str=valid_until_str or "N/A",
         )
         
         if hasattr(callback_or_message, 'message'):  # CallbackQuery
