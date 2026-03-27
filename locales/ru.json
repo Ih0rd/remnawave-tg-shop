@@ -506,7 +506,9 @@
   "admin_promo_step2_type": "🎟 <b>Создание промокода</b>\n\n<b>Шаг 2 из 5:</b> Тип промокода\n\nКод: <b>{code}</b>\n\nВыберите тип промокода:",
   "admin_promo_step3_bonus_days": "🎟 <b>Создание промокода</b>\n\n<b>Шаг 3 из 5:</b> Бонусные дни\n\nКод: <b>{code}</b>\n\nВведите количество бонусных дней (1-365):",
   "admin_promo_step3_package_key": "🎟 <b>Создание промокода</b>\n\n<b>Шаг 3 из 5:</b> Пакет устройств\n\nКод: <b>{code}</b>\n\nВыберите номер пакета:",
+  "admin_promo_step3_upgrade_days": "🎟 <b>Создание промокода</b>\n\n<b>Шаг 3 из 5:</b> Длительность апгрейда\n\nКод: <b>{code}</b>\nТип: <b>LTE Апгрейд подписки</b>\n\nВведите длительность апгрейда в днях (1-365):",
   "admin_promo_invalid_package_key": "❌ Номер пакета должен быть 1, 2 или 3",
+  "admin_promo_invalid_upgrade_days": "❌ Длительность апгрейда должна быть от 1 до 365 дней",
   "admin_promo_step4_max_activations": "🎟 <b>Создание промокода</b>\n\n<b>Шаг 4 из 5:</b> Лимит активаций\n\nКод: <b>{code}</b>\nБонусные дни: <b>{bonus_days}</b>\n\nВведите максимальное количество активаций (1-10000):",
   "admin_promo_step4_max_activations_package": "🎟 <b>Создание промокода</b>\n\n<b>Шаг 4 из 5:</b> Лимит активаций\n\nКод: <b>{code}</b>\nПакет: <b>{package_key}</b>\n\nВведите максимальное количество активаций (1-10000):",
   "admin_promo_step5_validity": "🎟 <b>Создание промокода</b>\n\n<b>Шаг 5 из 5:</b> Срок действия\n\nКод: <b>{code}</b>\n{benefit_line}\nМакс. активаций: <b>{max_activations}</b>\n\nВыберите срок действия промокода:",
@@ -526,7 +528,10 @@
   "squad_upgrade_expired": "⏳ Срок LTE апгрейда подписки закончился. Вам возвращен стандартный набор доступных регионов.",
   "promo_code_applied_success_upgrade": "✅ Промокод успешно применен!\nLTE Апгрейд подписки активирован до {expires_at}, приятного пользования! Апгрейд доступен в виде нового региона WhiteListMOD в мобильном клиенте HAPP, не забудьте обновить подписку в клиенте. ВАЖНО! Не пользуйтесь данным регионом на WIFI соединении!",
   "admin_promo_type_squad_upgrade": "🚀 LTE Апгрейд подписки",
-  "admin_promo_step4_max_activations_upgrade": "🎟 <b>Создание промокода</b>\n\n<b>Шаг 4 из 5:</b> Лимит активаций\n\nКод: <b>{code}</b>\nТип: <b>LTE Апгрейд подписки</b>\n\nВведите максимальное количество активаций (1-10000):",
-  "admin_promo_created_success_benefit_upgrade": "🚀 Тип: <b>LTE Апгрейд подписки</b>",
-  "admin_promo_card_upgrade": "🚀 LTE Апгрейд подписки"
+  "admin_promo_step4_max_activations_upgrade": "🎟 <b>Создание промокода</b>\n\n<b>Шаг 4 из 5:</b> Лимит активаций\n\nКод: <b>{code}</b>\nТип: <b>LTE Апгрейд подписки</b>\nДлительность: <b>{upgrade_days} дн.</b>\n\nВведите максимальное количество активаций (1-10000):",
+  "admin_promo_benefit_line_bonus_days": "Бонусные дни: <b>{bonus_days}</b>",
+  "admin_promo_benefit_line_package": "Пакет: <b>{package_key}</b>",
+  "admin_promo_benefit_line_upgrade": "Тип: <b>LTE Апгрейд подписки</b> · Длительность: <b>{upgrade_days} дн.</b>",
+  "admin_promo_created_success_benefit_upgrade": "🚀 Тип: <b>LTE Апгрейд подписки</b> · Длительность: <b>{upgrade_days} дн.</b>",
+  "admin_promo_card_upgrade": "🚀 LTE Апгрейд подписки: <b>{upgrade_days} дн.</b>"
 }

@@ -38,7 +38,7 @@ def get_promo_benefit_text(promo: PromoCode, i18n: JsonI18n, current_lang: str) 
     if (promo.promo_type or "bonus_days") == "device_package":
         return _("admin_promo_card_package_key", package_key=(promo.package_key or "N/A"))
     if (promo.promo_type or "bonus_days") == "squad_upgrade":
-        return _("admin_promo_card_upgrade", default="🚀 Апгрейд подписки")
+        return _("admin_promo_card_upgrade", default="🚀 Апгрейд подписки: <b>{upgrade_days} дн.</b>", upgrade_days=(promo.upgrade_days or 0))
     return _("admin_promo_card_bonus_days", days=promo.bonus_days)
 
 
