@@ -168,7 +168,7 @@
   "admin_promo_invalid_bonus_days": "Bonus days must be a positive number.",
   "admin_promo_invalid_max_activations": "Max activations must be a positive number.",
   "admin_promo_invalid_validity_days": "Validity period (in days) must be a positive number.",
-  "admin_promo_created_success": "✅ Promo code <code>{code}</code> created successfully!\nBonus: {bonus_days} days\nMax uses: {max_activations}\nValid until: {valid_until_str}.",
+  "admin_promo_created_success": "✅ Promo code <code>{code}</code> created successfully!\n{benefit_line}\nMax uses: {max_activations}\nValid until: {valid_until_str}.",
   "admin_promo_set_validity_days": "⏰ Set validity (days)",
   "admin_back_to_panel": "⬅️ Back to panel",
   "admin_promo_unlimited": "♾️ Unlimited",
@@ -510,8 +510,8 @@
   "admin_promo_step4_max_activations": "🎟 <b>Create Promo Code</b>\n\n<b>Step 4 of 5:</b> Max activations\n\nCode: <b>{code}</b>\nBonus days: <b>{bonus_days}</b>\n\nEnter max activations (1-10000):",
   "admin_promo_step4_max_activations_package": "🎟 <b>Create Promo Code</b>\n\n<b>Step 4 of 5:</b> Max activations\n\nCode: <b>{code}</b>\nPackage: <b>{package_key}</b>\n\nEnter max activations (1-10000):",
   "admin_promo_step5_validity": "🎟 <b>Create Promo Code</b>\n\n<b>Step 5 of 5:</b> Validity\n\nCode: <b>{code}</b>\n{benefit_line}\nMax activations: <b>{max_activations}</b>\n\nChoose promo validity:",
-  "admin_promo_created_success_benefit_days": "🎁 Bonus days: <b>{bonus_days}</b>",
-  "admin_promo_created_success_benefit_package": "📦 Device package: <b>{package_key}</b>",
+  "admin_promo_created_success_benefit_days": "🎁 Benefit: <b>{bonus_days} day(s)</b>",
+  "admin_promo_created_success_benefit_package": "🎁 Benefit: <b>Device package #{package_key}</b>",
   "admin_promo_card_package_key": "📦 Device package: <b>{package_key}</b>",
   "admin_promo_csv_benefit": "Benefit",
   "admin_promo_no_enabled_packages": "❌ No enabled device packages in settings",
@@ -527,6 +527,6 @@
   "promo_code_applied_success_upgrade": "✅ Promo code applied successfully!\nSubscription upgrade is active until {expires_at}.",
   "admin_promo_type_squad_upgrade": "🚀 Subscription upgrade",
   "admin_promo_step4_max_activations_upgrade": "🎟 <b>Create Promo Code</b>\n\n<b>Step 4 of 5:</b> Max activations\n\nCode: <b>{code}</b>\nType: <b>Subscription upgrade</b>\n\nEnter max activations (1-10000):",
-  "admin_promo_created_success_benefit_upgrade": "🚀 Type: <b>Subscription upgrade</b>",
+  "admin_promo_created_success_benefit_upgrade": "🎁 Benefit: <b>Subscription upgrade</b>",
   "admin_promo_card_upgrade": "🚀 Subscription upgrade"
 }

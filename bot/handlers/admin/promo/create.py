@@ -494,14 +494,22 @@ async def create_promo_code_final(callback_or_message,
 
     try:
         data = await state.get_data()
+        code = data.get("promo_code") or _("admin_promo_code_missing_fallback", default="UNKNOWN")
+        promo_type = data.get("promo_type", "bonus_days")
+        bonus_days = int(data.get("bonus_days", 0) or 0)
+        package_key = data.get("package_key")
+        package_key_display = package_key or _("admin_promo_value_missing_fallback", default="N/A")
+        max_activations = int(data.get("max_activations", 0) or 0)
+        if max_activations <= 0:
+            max_activations = 1
         
         # Prepare promo code data
         promo_data = {
-            "code": data["promo_code"],
-            "promo_type": data.get("promo_type", "bonus_days"),
-            "bonus_days": data.get("bonus_days", 0),
-            "package_key": data.get("package_key"),
-            "max_activations": data["max_activations"],
+            "code": code,
+            "promo_type": promo_type,
+            "bonus_days": bonus_days,
+            "package_key": package_key if promo_type == "device_package" else None,
+            "max_activations": max_activations,
             "current_activations": 0,
             "is_active": True,
             "created_by_admin_id": callback_or_message.from_user.id,
@@ -519,17 +527,21 @@ async def create_promo_code_final(callback_or_message,
         await session.commit()
         
         # Log successful creation
-        logging.info(f"Promo code '{data['promo_code']}' created with ID {created_promo.promo_code_id}")
+        logging.info(f"Promo code '{code}' created with ID {created_promo.promo_code_id}")
         
         # Success message
-        valid_until_str = _("admin_promo_unlimited", default="Без ограничений") if not data.get("validity_days") else f"{data['validity_days']} дней"
+        valid_until_str = (
+            _("admin_promo_unlimited", default="Без ограничений")
+            if not data.get("validity_days")
+            else f"{data.get('validity_days')} дней"
+        )
         benefit_line = (
-            _("admin_promo_created_success_benefit_package", package_key=data.get("package_key"))
-            if data.get("promo_type") == "device_package"
+            _("admin_promo_created_success_benefit_package", package_key=package_key_display)
+            if promo_type == "device_package"
             else (
                 _("admin_promo_created_success_benefit_upgrade")
-                if data.get("promo_type") == "squad_upgrade"
-                else _("admin_promo_created_success_benefit_days", bonus_days=data.get("bonus_days", 0))
+                if promo_type == "squad_upgrade"
+                else _("admin_promo_created_success_benefit_days", bonus_days=bonus_days)
             )
         )
         success_text = _(
@@ -539,10 +551,10 @@ async def create_promo_code_final(callback_or_message,
                    "{benefit_line}\n"
                    "📊 Макс. активаций: <b>{max_activations}</b>\n"
                    "⏰ Срок действия: <b>{valid_until_str}</b>",
-            code=data["promo_code"],
-            benefit_line=benefit_line,
-            max_activations=data["max_activations"],
-            valid_until_str=valid_until_str
+            code=code,
+            benefit_line=benefit_line or _("admin_promo_value_missing_fallback", default="N/A"),
+            max_activations=max_activations,
+            valid_until_str=valid_until_str or _("admin_promo_value_missing_fallback", default="N/A"),
         )
         
         if hasattr(callback_or_message, 'message'):  # CallbackQuery
