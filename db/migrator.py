@@ -197,6 +197,15 @@ def _migration_0007_add_upgrade_days_to_promo_codes(connection: Connection) -> N
         connection.execute(
             text("ALTER TABLE promo_codes ADD COLUMN upgrade_days INTEGER NOT NULL DEFAULT 0")
         )
+    connection.execute(
+        text(
+            """
+            UPDATE promo_codes
+            SET upgrade_days = 30
+            WHERE promo_type = 'squad_upgrade' AND upgrade_days <= 0
+            """
+        )
+    )
 
 
 MIGRATIONS: List[Migration] = [
