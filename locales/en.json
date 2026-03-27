@@ -347,7 +347,7 @@
   "admin_promo_unlimited_validity": "♾️ Unlimited",
   "admin_promo_enter_validity_days": "🎟 <b>Create Promo Code</b>\n\n<b>Step 5 of 5:</b> Validity\n\nCode: <b>{code}</b>\nBonus days: <b>{bonus_days}</b>\nMax activations: <b>{max_activations}</b>\n\nEnter the number of validity days for the promo code (1-365):",
   "admin_promo_enter_validity_days_package": "🎟 <b>Create Promo Code</b>\n\n<b>Step 5 of 5:</b> Validity\n\nCode: <b>{code}</b>\nPackage: <b>{package_key}</b>\nMax activations: <b>{max_activations}</b>\n\nEnter the number of validity days for the promo code (1-365):",
-  "admin_promo_enter_validity_days_upgrade": "🎟 <b>Create Promo Code</b>\n\n<b>Step 5 of 5:</b> Validity\n\nCode: <b>{code}</b>\nType: <b>Subscription upgrade</b>\nMax activations: <b>{max_activations}</b>\n\nEnter the number of validity days for the promo code (1-365):",
+  "admin_promo_enter_validity_days_upgrade": "🎟 <b>Create Promo Code</b>\n\n<b>Step 5 of 5:</b> Validity\n\nCode: <b>{code}</b>\nType: <b>Subscription upgrade</b>\nDuration: <b>{upgrade_days} days</b>\nMax activations: <b>{max_activations}</b>\n\nEnter the number of validity days for the promo code (1-365):",
   "admin_user_id_label": "🆔 <b>ID:</b>",
   "admin_user_name_label": "👤 <b>Name:</b>",
   "admin_user_username_label": "📱 <b>Username:</b>",
@@ -509,7 +509,9 @@
   "admin_promo_step2_type": "🎟 <b>Create Promo Code</b>\n\n<b>Step 2 of 5:</b> Promo type\n\nCode: <b>{code}</b>\n\nChoose promo type:",
   "admin_promo_step3_bonus_days": "🎟 <b>Create Promo Code</b>\n\n<b>Step 3 of 5:</b> Bonus days\n\nCode: <b>{code}</b>\n\nEnter bonus days (1-365):",
   "admin_promo_step3_package_key": "🎟 <b>Create Promo Code</b>\n\n<b>Step 3 of 5:</b> Device package\n\nCode: <b>{code}</b>\n\nChoose package number:",
+  "admin_promo_step3_upgrade_days": "🎟 <b>Create Promo Code</b>\n\n<b>Step 3 of 5:</b> Upgrade duration\n\nCode: <b>{code}</b>\nType: <b>Subscription upgrade</b>\n\nEnter upgrade duration in days (1-365):",
   "admin_promo_invalid_package_key": "❌ Package number must be 1, 2, or 3",
+  "admin_promo_invalid_upgrade_days": "❌ Upgrade duration must be between 1 and 365 days",
   "admin_promo_step4_max_activations": "🎟 <b>Create Promo Code</b>\n\n<b>Step 4 of 5:</b> Max activations\n\nCode: <b>{code}</b>\nBonus days: <b>{bonus_days}</b>\n\nEnter max activations (1-10000):",
   "admin_promo_step4_max_activations_package": "🎟 <b>Create Promo Code</b>\n\n<b>Step 4 of 5:</b> Max activations\n\nCode: <b>{code}</b>\nPackage: <b>{package_key}</b>\n\nEnter max activations (1-10000):",
   "admin_promo_step5_validity": "🎟 <b>Create Promo Code</b>\n\n<b>Step 5 of 5:</b> Validity\n\nCode: <b>{code}</b>\n{benefit_line}\nMax activations: <b>{max_activations}</b>\n\nChoose promo validity:",
@@ -530,7 +532,11 @@
   "squad_upgrade_expired": "⏳ Your subscription upgrade has expired. Default squad has been restored.",
   "promo_code_applied_success_upgrade": "✅ Promo code applied successfully!\nSubscription upgrade is active until {expires_at}.",
   "admin_promo_type_squad_upgrade": "🚀 Subscription upgrade",
-  "admin_promo_step4_max_activations_upgrade": "🎟 <b>Create Promo Code</b>\n\n<b>Step 4 of 5:</b> Max activations\n\nCode: <b>{code}</b>\nType: <b>Subscription upgrade</b>\n\nEnter max activations (1-10000):",
-  "admin_promo_created_success_benefit_upgrade": "🎁 Benefit: <b>Subscription upgrade</b>",
-  "admin_promo_card_upgrade": "🚀 Subscription upgrade"
+  "admin_promo_step4_max_activations_upgrade": "🎟 <b>Create Promo Code</b>\n\n<b>Step 4 of 5:</b> Max activations\n\nCode: <b>{code}</b>\nType: <b>Subscription upgrade</b>\nDuration: <b>{upgrade_days} days</b>\n\nEnter max activations (1-10000):",
+  "admin_promo_benefit_line_bonus_days": "Bonus days: <b>{bonus_days}</b>",
+  "admin_promo_benefit_line_package": "Package: <b>{package_key}</b>",
+  "admin_promo_benefit_line_upgrade": "Type: <b>Subscription upgrade</b> · Duration: <b>{upgrade_days} days</b>",
+  "admin_promo_created_success_benefit_upgrade": "🎁 Benefit: <b>Subscription upgrade</b> · Duration: <b>{upgrade_days} days</b>",
+  "admin_promo_card_upgrade": "🚀 Subscription upgrade: <b>{upgrade_days} days</b>",
+  "admin_promo_card_upgrade_legacy": "🚀 Subscription upgrade: <b>1 month (legacy)</b>"
 }
