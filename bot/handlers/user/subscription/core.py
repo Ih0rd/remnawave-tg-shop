@@ -35,6 +35,14 @@ def _localized_subscription_status(raw_status: Optional[str], get_text) -> str:
     return localized
 
 
+def _localized_purchase_status(is_purchased: Optional[bool], get_text) -> str:
+    if is_purchased is True:
+        return get_text("status_purchased")
+    if is_purchased is False:
+        return get_text("status_not_purchased")
+    return get_text("status_unknown")
+
+
 def _mask_hwid(value: Optional[str]) -> str:
     if not value:
         return "N/A"
@@ -247,6 +255,33 @@ async def my_subscription_command_handler(
                     get_text("subscription_tribute_notice_with_link", link=link) if link else get_text("subscription_tribute_notice")
                 )
 
+    has_active_device_package: Optional[bool] = None
+    has_active_squad_upgrade: Optional[bool] = None
+    try:
+        active_device_packages = await user_device_package_dal.get_active_packages(session, event.from_user.id)
+        has_active_device_package = bool(active_device_packages)
+    except Exception:
+        logging.exception("Failed to load active device packages for user %s", event.from_user.id)
+    try:
+        active_squad_upgrades = await user_squad_upgrade_dal.get_active_upgrades(session, event.from_user.id)
+        has_active_squad_upgrade = bool(active_squad_upgrades)
+    except Exception:
+        logging.exception("Failed to load active squad upgrades for user %s", event.from_user.id)
+
+    text = get_text(
+        "my_subscription_details",
+        end_date=end_date.strftime("%Y-%m-%d") if end_date else "N/A",
+        days_left=max(0, days_left),
+        status=_localized_subscription_status(active.get("status_from_panel"), get_text),
+        config_link=active.get("config_link") or get_text("config_link_not_available"),
+        traffic_limit=(f"{active['traffic_limit_bytes'] / 2**30:.2f} GB" if active.get("traffic_limit_bytes") else get_text("traffic_unlimited")),
+        traffic_used=(
+            f"{active['traffic_used_bytes'] / 2**30:.2f} GB" if active.get("traffic_used_bytes") is not None else get_text("traffic_na")
+        ),
+        extra_devices_status=_localized_purchase_status(has_active_device_package, get_text),
+        lte_upgrade_status=_localized_purchase_status(has_active_squad_upgrade, get_text),
+    )
+
     base_markup = get_back_to_main_menu_markup(current_lang, i18n)
     kb = base_markup.inline_keyboard
     try:
@@ -271,32 +306,6 @@ async def my_subscription_command_handler(
                         url=cfg_link_val,
                     )
                 ])
-
-        active_device_packages = await user_device_package_dal.get_active_packages(session, event.from_user.id)
-        has_active_device_package = bool(active_device_packages)
-        active_squad_upgrades = await user_squad_upgrade_dal.get_active_upgrades(session, event.from_user.id)
-        has_active_squad_upgrade = bool(active_squad_upgrades)
-        text = get_text(
-            "my_subscription_details",
-            end_date=end_date.strftime("%Y-%m-%d") if end_date else "N/A",
-            days_left=max(0, days_left),
-            status=_localized_subscription_status(active.get("status_from_panel"), get_text),
-            config_link=active.get("config_link") or get_text("config_link_not_available"),
-            traffic_limit=(f"{active['traffic_limit_bytes'] / 2**30:.2f} GB" if active.get("traffic_limit_bytes") else get_text("traffic_unlimited")),
-            traffic_used=(
-                f"{active['traffic_used_bytes'] / 2**30:.2f} GB" if active.get("traffic_used_bytes") is not None else get_text("traffic_na")
-            ),
-            extra_devices_status=(
-                get_text("status_purchased")
-                if has_active_device_package
-                else get_text("status_not_purchased")
-            ),
-            lte_upgrade_status=(
-                get_text("status_purchased")
-                if has_active_squad_upgrade
-                else get_text("status_not_purchased")
-            ),
-        )
 
         if settings.MY_DEVICES_SECTION_ENABLED:
             max_devices_value = active.get("max_devices")
@@ -348,14 +357,14 @@ async def my_subscription_command_handler(
                     callback_data="main_action:my_devices",
                 )
             ])
-            if settings.addon_device_packages and not _hwid_limit_disabled(max_devices_value) and not has_active_device_package:
+            if settings.addon_device_packages and not _hwid_limit_disabled(max_devices_value) and has_active_device_package is False:
                 prepend_rows.append([
                     InlineKeyboardButton(
                         text=get_text("buy_extra_devices_button"),
                         callback_data="main_action:buy_extra_devices",
                     )
                 ])
-        if settings.squad_upgrade_offer and not has_active_squad_upgrade:
+        if settings.squad_upgrade_offer and has_active_squad_upgrade is False:
             prepend_rows.append([
                 InlineKeyboardButton(
                     text=get_text("buy_squad_upgrade_button"),
@@ -384,19 +393,7 @@ async def my_subscription_command_handler(
         if prepend_rows:
             kb = prepend_rows + kb
     except Exception:
-        text = get_text(
-            "my_subscription_details",
-            end_date=end_date.strftime("%Y-%m-%d") if end_date else "N/A",
-            days_left=max(0, days_left),
-            status=_localized_subscription_status(active.get("status_from_panel"), get_text),
-            config_link=active.get("config_link") or get_text("config_link_not_available"),
-            traffic_limit=(f"{active['traffic_limit_bytes'] / 2**30:.2f} GB" if active.get("traffic_limit_bytes") else get_text("traffic_unlimited")),
-            traffic_used=(
-                f"{active['traffic_used_bytes'] / 2**30:.2f} GB" if active.get("traffic_used_bytes") is not None else get_text("traffic_na")
-            ),
-            extra_devices_status=get_text("status_not_purchased"),
-            lte_upgrade_status=get_text("status_not_purchased"),
-        )
+        logging.exception("Failed to build subscription action buttons for user %s", event.from_user.id)
     markup = InlineKeyboardMarkup(inline_keyboard=kb)
 
     if isinstance(event, types.CallbackQuery):

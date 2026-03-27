@@ -471,6 +471,7 @@
   "status_inactive": "Неактивна",
   "status_purchased": "Куплено",
   "status_not_purchased": "Не куплено",
+  "status_unknown": "Неизвестно",
   "admin_ads_section": "📈 Реклама",
   "admin_ads_header": "📈 Рекламные кампании:",
   "admin_ads_empty": "📭 Рекламные кампании отсутствуют. Нажмите \"Создать\" чтобы добавить новую.",

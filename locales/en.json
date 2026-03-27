@@ -471,6 +471,7 @@
   "status_inactive": "Inactive",
   "status_purchased": "Purchased",
   "status_not_purchased": "Not purchased",
+  "status_unknown": "Unknown",
   "admin_ads_section": "📈 Ads",
   "admin_ads_header": "📈 Ad Campaigns:",
   "admin_ads_empty": "📭 No ad campaigns. Click \"Create\" to add one.",
