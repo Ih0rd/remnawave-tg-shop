@@ -168,7 +168,7 @@
   "admin_promo_invalid_bonus_days": "Количество бонусных дней должно быть положительным числом.",
   "admin_promo_invalid_max_activations": "Максимальное количество активаций должно быть положительным числом.",
   "admin_promo_invalid_validity_days": "Срок действия промокода (в днях) должен быть положительным числом.",
-  "admin_promo_created_success": "✅ Промокод <code>{code}</code> успешно создан!\nБонус: {bonus_days} дней\nМакс. активаций: {max_activations}\nДействителен: {valid_until_str}",
+  "admin_promo_created_success": "✅ Промокод <code>{code}</code> успешно создан!\n{benefit_line}\nМакс. активаций: {max_activations}\nДействителен: {valid_until_str}",
   "subscription_72h_notification": "👋 Привет, {user_name}!\n\n⏳ Ваша подписка на VPN истекает через 3 дня — {end_date}.\n\nПродлите её по кнопке ниже.",
   "subscription_48h_notification": "👋 Привет, {user_name}!\n\n⏳ Ваша подписка на VPN истекает через 2 дня — {end_date}.\n\nПродлите её по кнопке ниже.",
   "subscription_24h_notification": "👋 Привет, {user_name}!\n\n⏳ Ваша подписка на VPN истекает через 1 день — {end_date}.\n\nПродлите её по кнопке ниже.",
@@ -513,8 +513,8 @@
   "admin_promo_step4_max_activations": "🎟 <b>Создание промокода</b>\n\n<b>Шаг 4 из 5:</b> Лимит активаций\n\nКод: <b>{code}</b>\nБонусные дни: <b>{bonus_days}</b>\n\nВведите максимальное количество активаций (1-10000):",
   "admin_promo_step4_max_activations_package": "🎟 <b>Создание промокода</b>\n\n<b>Шаг 4 из 5:</b> Лимит активаций\n\nКод: <b>{code}</b>\nПакет: <b>{package_key}</b>\n\nВведите максимальное количество активаций (1-10000):",
   "admin_promo_step5_validity": "🎟 <b>Создание промокода</b>\n\n<b>Шаг 5 из 5:</b> Срок действия\n\nКод: <b>{code}</b>\n{benefit_line}\nМакс. активаций: <b>{max_activations}</b>\n\nВыберите срок действия промокода:",
-  "admin_promo_created_success_benefit_days": "🎁 Бонусные дни: <b>{bonus_days}</b>",
-  "admin_promo_created_success_benefit_package": "📦 Пакет устройств: <b>{package_key}</b>",
+  "admin_promo_created_success_benefit_days": "🎁 Бонус: <b>{bonus_days} дн.</b>",
+  "admin_promo_created_success_benefit_package": "🎁 Бонус: <b>Пакет устройств #{package_key}</b>",
   "admin_promo_card_package_key": "📦 Пакет устройств: <b>{package_key}</b>",
   "admin_promo_csv_benefit": "Бонус",
   "admin_promo_no_enabled_packages": "❌ Нет включенных пакетов устройств в настройках",
@@ -531,6 +531,6 @@
   "promo_code_applied_success_upgrade": "✅ Промокод успешно применен!\nLTE Апгрейд подписки активирован до {expires_at}, приятного пользования! Апгрейд доступен в виде нового региона WhiteListMOD в мобильном клиенте HAPP, не забудьте обновить подписку в клиенте. ВАЖНО! Не пользуйтесь данным регионом на WIFI соединении!",
   "admin_promo_type_squad_upgrade": "🚀 LTE Апгрейд подписки",
   "admin_promo_step4_max_activations_upgrade": "🎟 <b>Создание промокода</b>\n\n<b>Шаг 4 из 5:</b> Лимит активаций\n\nКод: <b>{code}</b>\nТип: <b>LTE Апгрейд подписки</b>\n\nВведите максимальное количество активаций (1-10000):",
-  "admin_promo_created_success_benefit_upgrade": "🚀 Тип: <b>LTE Апгрейд подписки</b>",
+  "admin_promo_created_success_benefit_upgrade": "🎁 Бонус: <b>LTE Апгрейд подписки</b>",
   "admin_promo_card_upgrade": "🚀 LTE Апгрейд подписки"
 }
