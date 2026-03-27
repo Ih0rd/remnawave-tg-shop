@@ -18,7 +18,7 @@ from bot.services.panel_api_service import PanelApiService
 from bot.services.device_package_service import DevicePackageService
 from bot.services.squad_upgrade_service import SquadUpgradeService
 from bot.middlewares.i18n import JsonI18n
-from db.dal import subscription_dal, user_billing_dal
+from db.dal import subscription_dal, user_billing_dal, user_device_package_dal, user_squad_upgrade_dal
 from db.models import Subscription
 
 router = Router(name="user_subscription_core_router")
@@ -273,6 +273,11 @@ async def my_subscription_command_handler(
                     )
                 ])
 
+        active_device_packages = await user_device_package_dal.get_active_packages(session, event.from_user.id)
+        has_active_device_package = bool(active_device_packages)
+        active_squad_upgrades = await user_squad_upgrade_dal.get_active_upgrades(session, event.from_user.id)
+        has_active_squad_upgrade = bool(active_squad_upgrades)
+
         if settings.MY_DEVICES_SECTION_ENABLED:
             max_devices_value = active.get("max_devices")
             max_devices_display = get_text("devices_unlimited_label")
@@ -323,14 +328,14 @@ async def my_subscription_command_handler(
                     callback_data="main_action:my_devices",
                 )
             ])
-            if settings.addon_device_packages and not _hwid_limit_disabled(max_devices_value):
+            if settings.addon_device_packages and not _hwid_limit_disabled(max_devices_value) and not has_active_device_package:
                 prepend_rows.append([
                     InlineKeyboardButton(
                         text=get_text("buy_extra_devices_button"),
                         callback_data="main_action:buy_extra_devices",
                     )
                 ])
-        if settings.squad_upgrade_offer:
+        if settings.squad_upgrade_offer and not has_active_squad_upgrade:
             prepend_rows.append([
                 InlineKeyboardButton(
                     text=get_text("buy_squad_upgrade_button"),
@@ -577,6 +582,10 @@ async def buy_extra_devices_menu(
     if not active or _hwid_limit_disabled(active.get("max_devices")):
         await callback.answer(get_text("extra_devices_unavailable_no_hwid_limit"), show_alert=True)
         return
+    active_packages = await user_device_package_dal.get_active_packages(session, callback.from_user.id)
+    if active_packages:
+        await callback.answer(get_text("extra_devices_already_active"), show_alert=True)
+        return
     rows = []
     for package_key, item in packages.items():
         rows.append([InlineKeyboardButton(
@@ -677,6 +686,7 @@ async def buy_squad_upgrade_menu(
     callback: types.CallbackQuery,
     settings: Settings,
     i18n_data: dict,
+    session: AsyncSession,
 ):
     current_lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
     i18n: Optional[JsonI18n] = i18n_data.get("i18n_instance")
@@ -686,6 +696,10 @@ async def buy_squad_upgrade_menu(
     offer = settings.squad_upgrade_offer
     if not offer:
         await callback.answer(get_text("squad_upgrade_disabled"), show_alert=True)
+        return
+    active_upgrades = await user_squad_upgrade_dal.get_active_upgrades(session, callback.from_user.id)
+    if active_upgrades:
+        await callback.answer(get_text("squad_upgrade_already_active"), show_alert=True)
         return
     rows = []
     for months in (1, 3, 6, 12):
