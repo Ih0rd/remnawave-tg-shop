@@ -14,6 +14,7 @@ from bot.keyboards.inline.admin_keyboards import (
 from bot.middlewares.i18n import JsonI18n
 from bot.services.panel_api_service import PanelApiService
 from bot.services.subscription_service import SubscriptionService
+from bot.services.telegram_blacklist_service import TelegramBlacklistService
 from bot.utils.message_queue import get_queue_manager
 
 from . import broadcast as admin_broadcast_handlers
@@ -53,7 +54,7 @@ async def admin_panel_command_handler(
 async def admin_panel_actions_callback_handler(
         callback: types.CallbackQuery, state: FSMContext, settings: Settings,
         i18n_data: dict, bot: Bot, panel_service: PanelApiService,
-        subscription_service: SubscriptionService, session: AsyncSession):
+        subscription_service: SubscriptionService, telegram_blacklist_service: TelegramBlacklistService, session: AsyncSession):
     action_parts = callback.data.split(":")
     action = action_parts[1]
 
@@ -135,6 +136,16 @@ async def admin_panel_actions_callback_handler(
             panel_service=panel_service,
             session=session)
         await callback.answer(_("admin_sync_initiated_from_panel"))
+    elif action == "sync_telegram_blacklist":
+        await admin_sync_handlers.sync_telegram_blacklist_handler(
+            message_event=callback,
+            bot=bot,
+            settings=settings,
+            i18n_data=i18n_data,
+            telegram_blacklist_service=telegram_blacklist_service,
+            session=session,
+        )
+        await callback.answer("Синхронизация blacklist запущена")
     elif action == "queue_status":
         await show_queue_status_handler(callback, i18n_data)
     elif action == "view_payments":

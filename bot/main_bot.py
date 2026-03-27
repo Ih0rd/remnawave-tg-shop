@@ -53,6 +53,7 @@ async def on_startup_configured(dispatcher: Dispatcher):
     settings: Settings = dispatcher["settings"]
     i18n_instance: JsonI18n = dispatcher["i18n_instance"]
     panel_service: PanelApiService = dispatcher["panel_service"]
+    telegram_blacklist_service = dispatcher.get("telegram_blacklist_service")
 
     async_session_factory: sessionmaker = dispatcher["async_session_factory"]
     device_package_service = dispatcher.get("device_package_service")
@@ -174,6 +175,37 @@ async def on_startup_configured(dispatcher: Dispatcher):
     except Exception as e:
         logging.error(f"STARTUP: Failed to run automatic sync: {e}", exc_info=True)
 
+    if telegram_blacklist_service:
+        async def _telegram_blacklist_worker():
+            interval_hours = max(1, int(settings.TELEGRAM_BLACKLIST_SYNC_INTERVAL_HOURS))
+            interval_seconds = interval_hours * 3600
+            while True:
+                try:
+                    async with async_session_factory() as session:
+                        sync_result = await telegram_blacklist_service.sync_blacklist(session)
+                        await session.commit()
+                    logging.info(
+                        "STARTUP: Telegram blacklist sync done. fetched=%s banned=%s already_banned=%s created=%s panel_disabled=%s errors=%s",
+                        sync_result.fetched_ids,
+                        sync_result.banned_users,
+                        sync_result.already_banned,
+                        sync_result.users_created,
+                        sync_result.panel_disabled,
+                        sync_result.errors,
+                    )
+                except Exception:
+                    logging.exception("STARTUP: telegram blacklist worker iteration failed")
+                await asyncio.sleep(interval_seconds)
+
+        dispatcher["telegram_blacklist_task"] = asyncio.create_task(
+            _telegram_blacklist_worker(),
+            name="TelegramBlacklistWorker",
+        )
+        logging.info(
+            "STARTUP: Telegram blacklist worker started (interval=%s hours).",
+            max(1, int(settings.TELEGRAM_BLACKLIST_SYNC_INTERVAL_HOURS)),
+        )
+
     # Background sweep for expired add-ons/upgrades
     if device_package_service or squad_upgrade_service:
         async def _addon_expiry_worker():
@@ -212,6 +244,12 @@ async def on_shutdown_configured(dispatcher: Dispatcher):
         addon_expiry_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await addon_expiry_task
+
+    telegram_blacklist_task = dispatcher.get("telegram_blacklist_task")
+    if telegram_blacklist_task:
+        telegram_blacklist_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await telegram_blacklist_task
 
     async def close_service(key: str) -> None:
         service = dispatcher.get(key)

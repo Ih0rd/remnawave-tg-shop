@@ -238,6 +238,15 @@ class Settings(BaseSettings):
     INLINE_FINANCIAL_STATS_THUMBNAIL_URL: str = Field(default="https://cdn-icons-png.flaticon.com/512/2769/2769339.png")
     INLINE_SYSTEM_STATS_THUMBNAIL_URL: str = Field(default="https://cdn-icons-png.flaticon.com/512/2920/2920277.png")
 
+    TELEGRAM_BLACKLIST_SOURCE_URL: str = Field(
+        default="https://raw.githubusercontent.com/BEDOLAGA-DEV/VPN-BLACKLIST/main/blacklist.txt",
+        description="Source URL for Telegram ID blacklist (one id per line, optional #comment)",
+    )
+    TELEGRAM_BLACKLIST_SYNC_INTERVAL_HOURS: int = Field(
+        default=72,
+        description="Automatic Telegram blacklist sync interval in hours",
+    )
+
     @computed_field
     @property
     def DATABASE_URL(self) -> str:
