@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from calendar import monthrange
 from typing import Optional, Dict, Any
 import json
@@ -55,16 +55,24 @@ class SquadUpgradeService:
         session: AsyncSession,
         *,
         user_id: int,
-        months: int,
+        months: int | None = None,
+        duration_days: int | None = None,
         provider: str,
         payment_id: int | None = None,
     ) -> Optional[datetime]:
         offer = self.settings.squad_upgrade_offer
         if not offer:
             return None
+        if months is None and duration_days is None:
+            return None
         target_uuid = str(offer["target_uuid"])
         now = datetime.now(timezone.utc)
-        expires_at = _add_months_utc(now, months)
+        if duration_days is not None:
+            expires_at = now + timedelta(days=duration_days)
+            months_to_store = 0
+        else:
+            expires_at = _add_months_utc(now, months or 0)
+            months_to_store = months or 0
         from_squads = self._default_squads()
         applied = await self._update_panel_squads(session, user_id=user_id, internal_squads=[target_uuid])
         if not applied:
@@ -72,7 +80,7 @@ class SquadUpgradeService:
         await user_squad_upgrade_dal.create_upgrade(
             session,
             user_id=user_id,
-            months=months,
+            months=months_to_store,
             provider=provider,
             payment_id=payment_id,
             from_squads=json.dumps(from_squads, ensure_ascii=False),
