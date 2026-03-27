@@ -477,13 +477,24 @@ async def process_promo_set_validity(callback: types.CallbackQuery,
     _ = lambda key, **kwargs: i18n.gettext(current_lang, key, **kwargs)
 
     data = await state.get_data()
+    promo_type = data.get("promo_type", "bonus_days")
     benefit_line = _format_promo_benefit_line(data, _)
+    if promo_type == "device_package":
+        validity_key = "admin_promo_enter_validity_days_package"
+    elif promo_type == "squad_upgrade":
+        validity_key = "admin_promo_enter_validity_days_upgrade"
+    else:
+        validity_key = "admin_promo_enter_validity_days"
+
     prompt_text = _(
-        "admin_promo_enter_validity_days",
+        validity_key,
         default="🎟 <b>Создание промокода</b>\n\n<b>Шаг 5 из 5:</b> Срок действия\n\nКод: <b>{code}</b>\n{benefit_line}\nМакс. активаций: <b>{max_activations}</b>\n\nВведите количество дней действия промокода (1-365):",
         code=data.get("promo_code"),
         benefit_line=benefit_line,
-        max_activations=data.get("max_activations")
+        bonus_days=data.get("bonus_days"),
+        package_key=data.get("package_key"),
+        upgrade_days=data.get("upgrade_days"),
+        max_activations=data.get("max_activations"),
     )
     
     try:

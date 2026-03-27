@@ -346,6 +346,8 @@
   "admin_promo_code_already_exists": "❌ Промокод с таким кодом уже существует",
   "admin_promo_unlimited_validity": "♾️ Неограниченно",
   "admin_promo_enter_validity_days": "⏰ Введите количество дней действия промокода (1-365):",
+  "admin_promo_enter_validity_days_package": "🎟 <b>Создание промокода</b>\n\n<b>Шаг 5 из 5:</b> Срок действия\n\nКод: <b>{code}</b>\nПакет: <b>{package_key}</b>\nМакс. активаций: <b>{max_activations}</b>\n\nВведите количество дней действия промокода (1-365):",
+  "admin_promo_enter_validity_days_upgrade": "🎟 <b>Создание промокода</b>\n\n<b>Шаг 5 из 5:</b> Срок действия\n\nКод: <b>{code}</b>\nТип: <b>LTE Апгрейд подписки</b>\nДлительность: <b>{upgrade_days} дн.</b>\nМакс. активаций: <b>{max_activations}</b>\n\nВведите количество дней действия промокода (1-365):",
   "admin_user_id_label": "🆔 <b>ID:</b>",
   "admin_user_name_label": "👤 <b>Имя:</b>",
   "admin_user_username_label": "📱 <b>Username:</b>",

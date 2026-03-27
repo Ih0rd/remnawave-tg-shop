@@ -346,6 +346,8 @@
   "admin_promo_code_already_exists": "❌ A promo code with this code already exists",
   "admin_promo_unlimited_validity": "♾️ Unlimited",
   "admin_promo_enter_validity_days": "⏰ Enter the number of validity days for the promo code (1-365):",
+  "admin_promo_enter_validity_days_package": "🎟 <b>Create Promo Code</b>\n\n<b>Step 5 of 5:</b> Validity\n\nCode: <b>{code}</b>\nPackage: <b>{package_key}</b>\nMax activations: <b>{max_activations}</b>\n\nEnter promo validity days (1-365):",
+  "admin_promo_enter_validity_days_upgrade": "🎟 <b>Create Promo Code</b>\n\n<b>Step 5 of 5:</b> Validity\n\nCode: <b>{code}</b>\nType: <b>Subscription upgrade</b>\nDuration: <b>{upgrade_days} days</b>\nMax activations: <b>{max_activations}</b>\n\nEnter promo validity days (1-365):",
   "admin_user_id_label": "🆔 <b>ID:</b>",
   "admin_user_name_label": "👤 <b>Name:</b>",
   "admin_user_username_label": "📱 <b>Username:</b>",
