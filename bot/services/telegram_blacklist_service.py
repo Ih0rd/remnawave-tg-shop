@@ -74,8 +74,18 @@ class TelegramBlacklistService:
 
                 if user.panel_user_uuid:
                     try:
-                        await self.panel_service.update_user_status_on_panel(user.panel_user_uuid, False)
-                        result.panel_disabled += 1
+                        disabled = await self.panel_service.update_user_status_on_panel(
+                            user.panel_user_uuid, False
+                        )
+                        if disabled:
+                            result.panel_disabled += 1
+                        else:
+                            result.errors += 1
+                            logging.error(
+                                "Failed to disable panel user %s for tg_id=%s: panel status update returned False.",
+                                user.panel_user_uuid,
+                                tg_id,
+                            )
                     except Exception as panel_error:
                         result.errors += 1
                         logging.error(
