@@ -3,7 +3,7 @@ from aiogram import Router, F, types
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Callable, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.settings import Settings
@@ -16,17 +16,17 @@ from bot.middlewares.i18n import JsonI18n
 router = Router(name="promo_create_router")
 
 
-def _format_promo_benefit_line(data: dict, _: callable) -> str:
+def _format_promo_benefit_line(data: dict, translate: Callable) -> str:
     promo_type = data.get("promo_type", "bonus_days")
     if promo_type == "device_package":
-        return _("admin_promo_benefit_line_package", default="Пакет: <b>{package_key}</b>", package_key=data.get("package_key"))
+        return translate("admin_promo_benefit_line_package", default="Пакет: <b>{package_key}</b>", package_key=data.get("package_key"))
     if promo_type == "squad_upgrade":
-        return _(
+        return translate(
             "admin_promo_benefit_line_upgrade",
             default="Тип: <b>Апгрейд подписки</b> · Длительность: <b>{upgrade_days} дн.</b>",
             upgrade_days=data.get("upgrade_days", 0),
         )
-    return _("admin_promo_benefit_line_bonus_days", default="Бонусные дни: <b>{bonus_days}</b>", bonus_days=data.get("bonus_days"))
+    return translate("admin_promo_benefit_line_bonus_days", default="Бонусные дни: <b>{bonus_days}</b>", bonus_days=data.get("bonus_days"))
 
 
 async def create_promo_prompt_handler(callback: types.CallbackQuery,
