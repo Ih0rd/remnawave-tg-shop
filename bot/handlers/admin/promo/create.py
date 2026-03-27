@@ -31,7 +31,7 @@ async def create_promo_prompt_handler(callback: types.CallbackQuery,
     # Step 1: Ask for promo code
     prompt_text = _(
         "admin_promo_step1_code",
-        default="🎟 <b>Создание промокода</b>\n\n<b>Шаг 1 из 4:</b> Код промокода\n\nВведите код промокода (3-30 символов, только буквы и цифры):"
+        default="🎟 <b>Создание промокода</b>\n\n<b>Шаг 1 из 5:</b> Код промокода\n\nВведите код промокода (3-30 символов, только буквы и цифры):"
     )
 
     try:
@@ -421,11 +421,40 @@ async def process_promo_set_validity(callback: types.CallbackQuery,
     _ = lambda key, **kwargs: i18n.gettext(current_lang, key, **kwargs)
 
     data = await state.get_data()
+    promo_type = data.get("promo_type", "bonus_days")
+    if promo_type == "device_package":
+        validity_key = "admin_promo_enter_validity_days_package"
+        default_text = (
+            "🎟 <b>Создание промокода</b>\n\n<b>Шаг 5 из 5:</b> Срок действия\n\n"
+            "Код: <b>{code}</b>\n"
+            "Пакет: <b>{package_key}</b>\n"
+            "Макс. активаций: <b>{max_activations}</b>\n\n"
+            "Введите количество дней действия промокода (1-365):"
+        )
+    elif promo_type == "squad_upgrade":
+        validity_key = "admin_promo_enter_validity_days_upgrade"
+        default_text = (
+            "🎟 <b>Создание промокода</b>\n\n<b>Шаг 5 из 5:</b> Срок действия\n\n"
+            "Код: <b>{code}</b>\n"
+            "Тип: <b>Апгрейд подписки</b>\n"
+            "Макс. активаций: <b>{max_activations}</b>\n\n"
+            "Введите количество дней действия промокода (1-365):"
+        )
+    else:
+        validity_key = "admin_promo_enter_validity_days"
+        default_text = (
+            "🎟 <b>Создание промокода</b>\n\n<b>Шаг 5 из 5:</b> Срок действия\n\n"
+            "Код: <b>{code}</b>\n"
+            "Бонусные дни: <b>{bonus_days}</b>\n"
+            "Макс. активаций: <b>{max_activations}</b>\n\n"
+            "Введите количество дней действия промокода (1-365):"
+        )
     prompt_text = _(
-        "admin_promo_enter_validity_days",
-        default="🎟 <b>Создание промокода</b>\n\n<b>Шаг 5 из 5:</b> Срок действия\n\nКод: <b>{code}</b>\nБонусные дни: <b>{bonus_days}</b>\nМакс. активаций: <b>{max_activations}</b>\n\nВведите количество дней действия промокода (1-365):",
+        validity_key,
+        default=default_text,
         code=data.get("promo_code"),
         bonus_days=data.get("bonus_days"),
+        package_key=data.get("package_key"),
         max_activations=data.get("max_activations")
     )
     
