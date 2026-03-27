@@ -687,7 +687,7 @@ async def main_action_callback_handler(
         )
     elif action == "buy_squad_upgrade":
         await user_subscription_handlers.buy_squad_upgrade_menu(
-            callback, settings, i18n_data
+            callback, settings, i18n_data, session
         )
     elif action == "referral":
         await user_referral_handlers.referral_command_handler(
