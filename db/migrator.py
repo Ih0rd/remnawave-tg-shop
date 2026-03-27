@@ -189,6 +189,15 @@ def _migration_0006_add_user_squad_upgrades(connection: Connection) -> None:
     connection.execute(text("CREATE INDEX IF NOT EXISTS idx_usu_expires_at ON user_squad_upgrades(expires_at)"))
     connection.execute(text("CREATE INDEX IF NOT EXISTS idx_usu_is_active ON user_squad_upgrades(is_active)"))
 
+
+def _migration_0007_add_upgrade_days_to_promo_codes(connection: Connection) -> None:
+    inspector = inspect(connection)
+    columns: Set[str] = {col["name"] for col in inspector.get_columns("promo_codes")}
+    if "upgrade_days" not in columns:
+        connection.execute(
+            text("ALTER TABLE promo_codes ADD COLUMN upgrade_days INTEGER NOT NULL DEFAULT 0")
+        )
+
 MIGRATIONS: List[Migration] = [
     Migration(
         id="0001_add_channel_subscription_fields",
@@ -219,6 +228,11 @@ MIGRATIONS: List[Migration] = [
         id="0006_add_user_squad_upgrades",
         description="Add temporary squad upgrade subscriptions storage",
         upgrade=_migration_0006_add_user_squad_upgrades,
+    ),
+    Migration(
+        id="0007_add_upgrade_days_to_promo_codes",
+        description="Store squad-upgrade promo duration in days",
+        upgrade=_migration_0007_add_upgrade_days_to_promo_codes,
     ),
 ]
 

@@ -54,6 +54,7 @@ class PromoCodeService:
 
         promo_type = (promo_data.promo_type or "bonus_days").lower()
         bonus_days = promo_data.bonus_days or 0
+        upgrade_days = promo_data.upgrade_days or 0
         package_key = (promo_data.package_key or "").strip()
 
         new_end_date: datetime | None = None
@@ -83,10 +84,12 @@ class PromoCodeService:
         elif promo_type == "squad_upgrade":
             if not self.squad_upgrade_service:
                 return False, _("error_applying_promo_bonus")
+            duration_days = upgrade_days if upgrade_days > 0 else None
             upgrade_expires_at = await self.squad_upgrade_service.activate_paid_upgrade(
                 session,
                 user_id=user_id,
                 months=1,
+                duration_days=duration_days,
                 provider="promo_code",
                 payment_id=None,
             )

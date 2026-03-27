@@ -3,7 +3,7 @@ from aiogram import Router, F, types
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Callable, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.settings import Settings
@@ -14,6 +14,27 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder, InlineKeyboardButton
 from bot.middlewares.i18n import JsonI18n
 
 router = Router(name="promo_create_router")
+
+
+def _format_promo_benefit_line(data: dict, translate: Callable) -> str:
+    promo_type = data.get("promo_type", "bonus_days")
+    if promo_type == "device_package":
+        return translate(
+            "admin_promo_benefit_line_package",
+            default="Пакет: <b>{package_key}</b>",
+            package_key=data.get("package_key"),
+        )
+    if promo_type == "squad_upgrade":
+        return translate(
+            "admin_promo_benefit_line_upgrade",
+            default="Тип: <b>Апгрейд подписки</b> · Длительность: <b>{upgrade_days} дн.</b>",
+            upgrade_days=data.get("upgrade_days", 0),
+        )
+    return translate(
+        "admin_promo_benefit_line_bonus_days",
+        default="Бонусные дни: <b>{bonus_days}</b>",
+        bonus_days=data.get("bonus_days"),
+    )
 
 
 async def create_promo_prompt_handler(callback: types.CallbackQuery,
@@ -188,11 +209,11 @@ async def process_promo_type_handler(
         )
         await state.set_state(AdminStates.waiting_for_promo_package_key)
     elif promo_type == "squad_upgrade":
-        await state.update_data(bonus_days=0, package_key=None)
+        await state.update_data(bonus_days=0, package_key=None, upgrade_days=0)
         data = await state.get_data()
         prompt_text = _(
-            "admin_promo_step4_max_activations_upgrade",
-            default="🎟 <b>Создание промокода</b>\n\n<b>Шаг 4 из 5:</b> Лимит активаций\n\nКод: <b>{code}</b>\nТип: <b>Апгрейд подписки</b>\n\nВведите максимальное количество активаций (1-10000):",
+            "admin_promo_step3_upgrade_days",
+            default="🎟 <b>Создание промокода</b>\n\n<b>Шаг 3 из 5:</b> Длительность апгрейда\n\nКод: <b>{code}</b>\nТип: <b>Апгрейд подписки</b>\n\nВведите длительность апгрейда в днях (1-365):",
             code=data.get("promo_code"),
         )
         await callback.message.edit_text(
@@ -200,7 +221,7 @@ async def process_promo_type_handler(
             reply_markup=get_back_to_admin_panel_keyboard(current_lang, i18n),
             parse_mode="HTML",
         )
-        await state.set_state(AdminStates.waiting_for_promo_max_activations)
+        await state.set_state(AdminStates.waiting_for_promo_upgrade_days)
     else:
         prompt_text = _(
             "admin_promo_step3_bonus_days",
@@ -314,6 +335,53 @@ async def process_promo_bonus_days_handler(message: types.Message,
         await message.answer(_("error_occurred_try_again"))
 
 
+# Step 3 (for squad upgrade promo): Process upgrade days
+@router.message(AdminStates.waiting_for_promo_upgrade_days, F.text)
+async def process_promo_upgrade_days_handler(message: types.Message,
+                                             state: FSMContext,
+                                             i18n_data: dict,
+                                             settings: Settings):
+    current_lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
+    i18n: Optional[JsonI18n] = i18n_data.get("i18n_instance")
+    if not i18n:
+        await message.reply("Language service error.")
+        return
+    _ = lambda key, **kwargs: i18n.gettext(current_lang, key, **kwargs)
+
+    try:
+        upgrade_days = int(message.text.strip())
+        if not (1 <= upgrade_days <= 365):
+            await message.answer(_(
+                "admin_promo_invalid_upgrade_days",
+                default="❌ Длительность апгрейда должна быть от 1 до 365 дней",
+            ))
+            return
+
+        await state.update_data(upgrade_days=upgrade_days)
+        data = await state.get_data()
+        prompt_text = _(
+            "admin_promo_step4_max_activations_upgrade",
+            default="🎟 <b>Создание промокода</b>\n\n<b>Шаг 4 из 5:</b> Лимит активаций\n\nКод: <b>{code}</b>\nТип: <b>Апгрейд подписки</b>\nДлительность: <b>{upgrade_days} дн.</b>\n\nВведите максимальное количество активаций (1-10000):",
+            code=data.get("promo_code"),
+            upgrade_days=upgrade_days,
+        )
+
+        await message.answer(
+            prompt_text,
+            reply_markup=get_back_to_admin_panel_keyboard(current_lang, i18n),
+            parse_mode="HTML",
+        )
+        await state.set_state(AdminStates.waiting_for_promo_max_activations)
+    except ValueError:
+        await message.answer(_(
+            "admin_promo_invalid_number",
+            default="❌ Введите корректное число",
+        ))
+    except Exception as e:
+        logging.error(f"Error processing promo upgrade days: {e}")
+        await message.answer(_("error_occurred_try_again"))
+
+
 # Step 3: Process max activations
 @router.message(AdminStates.waiting_for_promo_max_activations, F.text)
 async def process_promo_max_activations_handler(message: types.Message,
@@ -341,20 +409,11 @@ async def process_promo_max_activations_handler(message: types.Message,
         # Step 5: Ask for validity
         data = await state.get_data()
         promo_type = data.get("promo_type", "bonus_days")
-        is_package = promo_type == "device_package"
         prompt_text = _(
             "admin_promo_step5_validity",
             default="🎟 <b>Создание промокода</b>\n\n<b>Шаг 5 из 5:</b> Срок действия\n\nКод: <b>{code}</b>\n{benefit_line}\nМакс. активаций: <b>{max_activations}</b>\n\nВыберите срок действия промокода:",
             code=data.get("promo_code"),
-            benefit_line=(
-                f"Пакет: <b>{data.get('package_key')}</b>"
-                if is_package
-                else (
-                    "Тип: <b>Апгрейд подписки</b>"
-                    if promo_type == "squad_upgrade"
-                    else f"Бонусные дни: <b>{data.get('bonus_days')}</b>"
-                )
-            ),
+            benefit_line=_format_promo_benefit_line(data, _),
             max_activations=max_activations
         )
         
@@ -422,39 +481,21 @@ async def process_promo_set_validity(callback: types.CallbackQuery,
 
     data = await state.get_data()
     promo_type = data.get("promo_type", "bonus_days")
+    benefit_line = _format_promo_benefit_line(data, _)
     if promo_type == "device_package":
         validity_key = "admin_promo_enter_validity_days_package"
-        default_text = (
-            "🎟 <b>Создание промокода</b>\n\n<b>Шаг 5 из 5:</b> Срок действия\n\n"
-            "Код: <b>{code}</b>\n"
-            "Пакет: <b>{package_key}</b>\n"
-            "Макс. активаций: <b>{max_activations}</b>\n\n"
-            "Введите количество дней действия промокода (1-365):"
-        )
     elif promo_type == "squad_upgrade":
         validity_key = "admin_promo_enter_validity_days_upgrade"
-        default_text = (
-            "🎟 <b>Создание промокода</b>\n\n<b>Шаг 5 из 5:</b> Срок действия\n\n"
-            "Код: <b>{code}</b>\n"
-            "Тип: <b>Апгрейд подписки</b>\n"
-            "Макс. активаций: <b>{max_activations}</b>\n\n"
-            "Введите количество дней действия промокода (1-365):"
-        )
     else:
         validity_key = "admin_promo_enter_validity_days"
-        default_text = (
-            "🎟 <b>Создание промокода</b>\n\n<b>Шаг 5 из 5:</b> Срок действия\n\n"
-            "Код: <b>{code}</b>\n"
-            "Бонусные дни: <b>{bonus_days}</b>\n"
-            "Макс. активаций: <b>{max_activations}</b>\n\n"
-            "Введите количество дней действия промокода (1-365):"
-        )
     prompt_text = _(
         validity_key,
-        default=default_text,
+        default="🎟 <b>Создание промокода</b>\n\n<b>Шаг 5 из 5:</b> Срок действия\n\nКод: <b>{code}</b>\n{benefit_line}\nМакс. активаций: <b>{max_activations}</b>\n\nВведите количество дней действия промокода (1-365):",
         code=data.get("promo_code"),
+        benefit_line=benefit_line,
         bonus_days=data.get("bonus_days"),
         package_key=data.get("package_key"),
+        upgrade_days=data.get("upgrade_days"),
         max_activations=data.get("max_activations")
     )
     
@@ -536,6 +577,7 @@ async def create_promo_code_final(callback_or_message,
             return
         promo_type = data.get("promo_type", "bonus_days")
         bonus_days = int(data.get("bonus_days", 0) or 0)
+        upgrade_days = int(data.get("upgrade_days", 0) or 0)
         package_key = data.get("package_key")
         package_key_display = package_key or "N/A"
         max_activations = int(data.get("max_activations", 0) or 0)
@@ -547,6 +589,7 @@ async def create_promo_code_final(callback_or_message,
             "code": code,
             "promo_type": promo_type,
             "bonus_days": bonus_days,
+            "upgrade_days": upgrade_days,
             "package_key": package_key if promo_type == "device_package" else None,
             "max_activations": max_activations,
             "current_activations": 0,
@@ -583,6 +626,8 @@ async def create_promo_code_final(callback_or_message,
                 else _("admin_promo_created_success_benefit_days", bonus_days=bonus_days)
             )
         )
+        if promo_type == "squad_upgrade":
+            benefit_line = _("admin_promo_created_success_benefit_upgrade", upgrade_days=upgrade_days)
         success_text = _(
             "admin_promo_created_success",
             default="✅ <b>Промокод успешно создан!</b>\n\n"
@@ -640,6 +685,7 @@ async def create_promo_code_final(callback_or_message,
         AdminStates.waiting_for_promo_type,
         AdminStates.waiting_for_promo_bonus_days,
         AdminStates.waiting_for_promo_package_key,
+        AdminStates.waiting_for_promo_upgrade_days,
         AdminStates.waiting_for_promo_max_activations,
         AdminStates.waiting_for_promo_validity_days,
     ),
