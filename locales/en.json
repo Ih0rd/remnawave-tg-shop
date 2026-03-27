@@ -537,5 +537,6 @@
   "admin_promo_benefit_line_package": "Package: <b>{package_key}</b>",
   "admin_promo_benefit_line_upgrade": "Type: <b>Subscription upgrade</b> · Duration: <b>{upgrade_days} days</b>",
   "admin_promo_created_success_benefit_upgrade": "🎁 Benefit: <b>Subscription upgrade</b> · Duration: <b>{upgrade_days} days</b>",
-  "admin_promo_card_upgrade": "🚀 Subscription upgrade: <b>{upgrade_days} days</b>"
+  "admin_promo_card_upgrade": "🚀 Subscription upgrade: <b>{upgrade_days} days</b>",
+  "admin_promo_card_upgrade_legacy": "🚀 Subscription upgrade: <b>1 month (legacy)</b>"
 }

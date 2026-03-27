@@ -537,5 +537,6 @@
   "admin_promo_benefit_line_package": "Пакет: <b>{package_key}</b>",
   "admin_promo_benefit_line_upgrade": "Тип: <b>Апгрейд подписки</b> · Длительность: <b>{upgrade_days} дн.</b>",
   "admin_promo_created_success_benefit_upgrade": "🎁 Бонус: <b>Апгрейд подписки</b> · Длительность: <b>{upgrade_days} дн.</b>",
-  "admin_promo_card_upgrade": "🚀 Апгрейд подписки: <b>{upgrade_days} дн.</b>"
+  "admin_promo_card_upgrade": "🚀 Апгрейд подписки: <b>{upgrade_days} дн.</b>",
+  "admin_promo_card_upgrade_legacy": "🚀 Апгрейд подписки: <b>1 месяц (legacy)</b>"
 }
