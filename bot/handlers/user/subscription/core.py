@@ -24,6 +24,17 @@ from db.models import Subscription
 router = Router(name="user_subscription_core_router")
 
 
+def _localized_subscription_status(raw_status: Optional[str], get_text) -> str:
+    status_value = (raw_status or "").strip().lower()
+    if not status_value:
+        return get_text("status_active")
+
+    localized = get_text(f"status_{status_value}")
+    if localized == f"status_{status_value}":
+        return raw_status
+    return localized
+
+
 def _mask_hwid(value: Optional[str]) -> str:
     if not value:
         return "N/A"
@@ -236,18 +247,6 @@ async def my_subscription_command_handler(
                     get_text("subscription_tribute_notice_with_link", link=link) if link else get_text("subscription_tribute_notice")
                 )
 
-    text = get_text(
-        "my_subscription_details",
-        end_date=end_date.strftime("%Y-%m-%d") if end_date else "N/A",
-        days_left=max(0, days_left),
-        status=active.get("status_from_panel", get_text("status_active")).capitalize(),
-        config_link=active.get("config_link") or get_text("config_link_not_available"),
-        traffic_limit=(f"{active['traffic_limit_bytes'] / 2**30:.2f} GB" if active.get("traffic_limit_bytes") else get_text("traffic_unlimited")),
-        traffic_used=(
-            f"{active['traffic_used_bytes'] / 2**30:.2f} GB" if active.get("traffic_used_bytes") is not None else get_text("traffic_na")
-        ),
-    )
-
     base_markup = get_back_to_main_menu_markup(current_lang, i18n)
     kb = base_markup.inline_keyboard
     try:
@@ -277,6 +276,27 @@ async def my_subscription_command_handler(
         has_active_device_package = bool(active_device_packages)
         active_squad_upgrades = await user_squad_upgrade_dal.get_active_upgrades(session, event.from_user.id)
         has_active_squad_upgrade = bool(active_squad_upgrades)
+        text = get_text(
+            "my_subscription_details",
+            end_date=end_date.strftime("%Y-%m-%d") if end_date else "N/A",
+            days_left=max(0, days_left),
+            status=_localized_subscription_status(active.get("status_from_panel"), get_text),
+            config_link=active.get("config_link") or get_text("config_link_not_available"),
+            traffic_limit=(f"{active['traffic_limit_bytes'] / 2**30:.2f} GB" if active.get("traffic_limit_bytes") else get_text("traffic_unlimited")),
+            traffic_used=(
+                f"{active['traffic_used_bytes'] / 2**30:.2f} GB" if active.get("traffic_used_bytes") is not None else get_text("traffic_na")
+            ),
+            extra_devices_status=(
+                get_text("status_purchased")
+                if has_active_device_package
+                else get_text("status_not_purchased")
+            ),
+            lte_upgrade_status=(
+                get_text("status_purchased")
+                if has_active_squad_upgrade
+                else get_text("status_not_purchased")
+            ),
+        )
 
         if settings.MY_DEVICES_SECTION_ENABLED:
             max_devices_value = active.get("max_devices")
@@ -364,7 +384,19 @@ async def my_subscription_command_handler(
         if prepend_rows:
             kb = prepend_rows + kb
     except Exception:
-        pass
+        text = get_text(
+            "my_subscription_details",
+            end_date=end_date.strftime("%Y-%m-%d") if end_date else "N/A",
+            days_left=max(0, days_left),
+            status=_localized_subscription_status(active.get("status_from_panel"), get_text),
+            config_link=active.get("config_link") or get_text("config_link_not_available"),
+            traffic_limit=(f"{active['traffic_limit_bytes'] / 2**30:.2f} GB" if active.get("traffic_limit_bytes") else get_text("traffic_unlimited")),
+            traffic_used=(
+                f"{active['traffic_used_bytes'] / 2**30:.2f} GB" if active.get("traffic_used_bytes") is not None else get_text("traffic_na")
+            ),
+            extra_devices_status=get_text("status_not_purchased"),
+            lte_upgrade_status=get_text("status_not_purchased"),
+        )
     markup = InlineKeyboardMarkup(inline_keyboard=kb)
 
     if isinstance(event, types.CallbackQuery):
