@@ -497,15 +497,9 @@ async def pay_yk_addon_handler(callback: types.CallbackQuery, settings: Settings
     if not i18n or not callback.message:
         return
     try:
-        _, a, b, c = callback.data.split(":")
-        if a.isdigit():
-            months = int(a)
-            price_rub = float(b)
-            package_key = c
-        else:
-            package_key = a
-            months = int(b)
-            price_rub = float(c)
+        _, package_key, months_str, price_str = callback.data.split(":")
+        months = int(months_str)
+        price_rub = float(price_str)
     except Exception:
         await callback.answer(get_text("error_try_again"), show_alert=True)
         return
@@ -629,15 +623,13 @@ async def pay_yk_addon_new_card_handler(callback: types.CallbackQuery, settings:
     get_text = lambda key, **kwargs: i18n.gettext(current_lang, key, **kwargs) if i18n else key
     if not i18n or not callback.message:
         return
-    _, a, b, c = callback.data.split(":")
-    if a.isdigit():
-        months = int(a)
-        price_rub = float(b)
-        package_key = c
-    else:
-        package_key = a
-        months = int(b)
-        price_rub = float(c)
+    try:
+        _, package_key, months_str, price_str = callback.data.split(":")
+        months = int(months_str)
+        price_rub = float(price_str)
+    except Exception:
+        await callback.answer(get_text("error_try_again"), show_alert=True)
+        return
     await _initiate_yk_payment(
         callback,
         settings=settings,
