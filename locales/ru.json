@@ -88,7 +88,7 @@
   "yes_button": "Да",
   "no_button": "Нет",
   "referral_program_info_new": "🎁 <b>Реферальная программа</b>\n\n📊 <b>Твоя статистика:</b>\n👥 Приглашено друзей: <b>{invited_count}</b>\n💳 Купили подписку: <b>{purchased_count}</b>\n\n🔗 Твоя ссылка:\n<code>{referral_link}</code>\n\n💰 <b>Бонусы за приглашения:</b>\n{bonus_details}\n\n📢 Поделись ссылкой с друзьями и получай бонусы!",
-  "referral_bonus_per_period": "\n\n🎁 За {months}-мес. подписку друга:\n  ➢ Вы: <b>{inviter_bonus_days} дн.</b>\n  ➢ Друг: <b>{referee_bonus_days} дн.</b>",
+  "referral_bonus_per_period": "\n\n🎁 За {months}-мес. подписку друга:\n  ➢ Вы: <b>{inviter_bonus_days} дн.</b> + 🚀 <b>{inviter_lte_bonus_days} дн. LTE</b>\n  ➢ Друг: <b>{referee_bonus_days} дн.</b> + 🚀 <b>{referee_lte_bonus_days} дн. LTE</b>",
   "referral_share_message_button": "📩 Сообщение для друга",
   "referral_friend_message": "🚀 Привет! Попробуй этот VPN - быстрый, надёжный и доступный!\n\n🎁 По ссылке тебе дадут бонусные дни к подписке!\n\n{referral_link}",
   "friend_placeholder": "друг",
@@ -541,5 +541,6 @@
   "admin_promo_benefit_line_upgrade": "Тип: <b>Апгрейд подписки</b> · Длительность: <b>{upgrade_days} дн.</b>",
   "admin_promo_created_success_benefit_upgrade": "🎁 Бонус: <b>Апгрейд подписки</b> · Длительность: <b>{upgrade_days} дн.</b>",
   "admin_promo_card_upgrade": "🚀 Апгрейд подписки: <b>{upgrade_days} дн.</b>",
-  "admin_promo_card_upgrade_legacy": "🚀 Апгрейд подписки: <b>1 месяц (legacy)</b>"
+  "admin_promo_card_upgrade_legacy": "🚀 Апгрейд подписки: <b>1 месяц (legacy)</b>",
+  "admin_sync_blacklist_button": "🚫 Синхронизировать Telegram blacklist"
 }

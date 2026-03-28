@@ -81,14 +81,20 @@ async def referral_command_handler(event: Union[types.Message,
 
             inv_bonus = settings.referral_bonus_inviter.get(months_period_key)
             ref_bonus = settings.referral_bonus_referee.get(months_period_key)
-            if inv_bonus is not None or ref_bonus is not None:
+            inv_lte_bonus = settings.referral_lte_bonus_inviter.get(months_period_key)
+            ref_lte_bonus = settings.referral_lte_bonus_referee.get(months_period_key)
+            if any(v is not None for v in (inv_bonus, ref_bonus, inv_lte_bonus, ref_lte_bonus)):
                 bonus_info_parts.append(
                     _("referral_bonus_per_period",
                       months=months_period_key,
                       inviter_bonus_days=inv_bonus
                       if inv_bonus is not None else _("no_bonus_placeholder"),
                       referee_bonus_days=ref_bonus
-                      if ref_bonus is not None else _("no_bonus_placeholder")))
+                      if ref_bonus is not None else _("no_bonus_placeholder"),
+                      inviter_lte_bonus_days=inv_lte_bonus
+                      if inv_lte_bonus is not None else _("no_bonus_placeholder"),
+                      referee_lte_bonus_days=ref_lte_bonus
+                      if ref_lte_bonus is not None else _("no_bonus_placeholder")))
 
     bonus_details_str = "\n".join(bonus_info_parts) if bonus_info_parts else _(
         "referral_no_bonuses_configured")

@@ -71,11 +71,18 @@ class SquadUpgradeService:
             return None
         target_uuid = str(offer["target_uuid"])
         now = datetime.now(timezone.utc)
+        active_upgrades = await user_squad_upgrade_dal.get_active_upgrades(session, user_id)
+        base_dt = now
+        if active_upgrades:
+            latest_expire = max(upgrade.expires_at for upgrade in active_upgrades)
+            if latest_expire and latest_expire > base_dt:
+                base_dt = latest_expire
+
         if duration_days is not None:
-            expires_at = now + timedelta(days=duration_days)
+            expires_at = base_dt + timedelta(days=duration_days)
             months_to_store = 0
         else:
-            expires_at = _add_months_utc(now, months or 0)
+            expires_at = _add_months_utc(base_dt, months or 0)
             months_to_store = months or 0
         from_squads = self._default_squads()
         applied = await self._update_panel_squads(session, user_id=user_id, internal_squads=[target_uuid])
