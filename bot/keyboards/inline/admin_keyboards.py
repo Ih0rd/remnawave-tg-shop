@@ -282,7 +282,7 @@ def get_banned_users_keyboard(banned_users: List[User], current_page: int,
             InlineKeyboardButton(
                 text=button_text,
                 callback_data=
-                f"admin_user_card:{user_row.user_id}:{current_page}"))
+                f"admin_user_card_from_list:{user_row.user_id}:{current_page}"))
 
     if total_banned > page_size:
         total_pages = math.ceil(total_banned / page_size)
