@@ -64,12 +64,16 @@ async def _initiate_yk_payment(
     back_callback: str,
     payment_method_id: Optional[str] = None,
     selected_method_internal_id: Optional[int] = None,
+    description_override: Optional[str] = None,
+    provider: str = "yookassa",
+    payment_target: str = "subscription",
+    addon_package_key: Optional[str] = None,
 ) -> bool:
     """Create payment record and initiate YooKassa payment (new card or saved card)."""
     if not callback.message:
         return False
 
-    payment_description = get_text("payment_description_subscription", months=months)
+    payment_description = description_override or get_text("payment_description_subscription", months=months)
     payment_record_data = {
         "user_id": user_id,
         "amount": price_rub,
@@ -77,6 +81,7 @@ async def _initiate_yk_payment(
         "status": "pending_yookassa",
         "description": payment_description,
         "subscription_duration_months": months,
+        "provider": provider,
     }
 
     db_payment_record = None
@@ -109,7 +114,10 @@ async def _initiate_yk_payment(
         "user_id": str(user_id),
         "subscription_months": str(months),
         "payment_db_id": str(db_payment_record.payment_id),
+        "payment_target": payment_target,
     }
+    if addon_package_key:
+        yookassa_metadata["addon_package_key"] = addon_package_key
     if payment_method_id:
         yookassa_metadata["used_saved_payment_method_id"] = payment_method_id
 
@@ -479,6 +487,354 @@ async def pay_yk_new_card_handler(callback: types.CallbackQuery, settings: Setti
         await callback.answer()
     except Exception:
         pass
+
+
+@router.callback_query(F.data.startswith("pay_yk_addon:"))
+async def pay_yk_addon_handler(callback: types.CallbackQuery, settings: Settings, i18n_data: dict, yookassa_service: YooKassaService, session: AsyncSession):
+    current_lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
+    i18n: Optional[JsonI18n] = i18n_data.get("i18n_instance")
+    get_text = lambda key, **kwargs: i18n.gettext(current_lang, key, **kwargs) if i18n else key
+    if not i18n or not callback.message:
+        return
+    try:
+        _, a, b, c = callback.data.split(":")
+        if a.isdigit():
+            months = int(a)
+            price_rub = float(b)
+            package_key = c
+        else:
+            package_key = a
+            months = int(b)
+            price_rub = float(c)
+    except Exception:
+        await callback.answer(get_text("error_try_again"), show_alert=True)
+        return
+    autopay_enabled = bool(settings.yookassa_autopayments_active)
+    saved_methods: List = []
+    if autopay_enabled:
+        try:
+            saved_methods = await user_billing_dal.list_user_payment_methods(
+                session, callback.from_user.id, provider="yookassa"
+            )
+        except Exception:
+            saved_methods = []
+    if autopay_enabled and saved_methods:
+        await callback.message.edit_text(
+            get_text("yookassa_autopay_flow_prompt"),
+            reply_markup=get_yk_autopay_choice_keyboard(
+                months,
+                price_rub,
+                current_lang,
+                i18n,
+                has_saved_cards=True,
+                saved_list_callback=f"pay_yk_addon_saved_list:{months}:{price_rub}:0:{package_key}",
+                new_card_callback=f"pay_yk_addon_new:{package_key}:{months}:{price_rub}",
+                back_callback=f"addon_period:{package_key}:{months}",
+            ),
+        )
+        await callback.answer()
+        return
+    autopay_require_binding = bool(
+        getattr(settings, 'YOOKASSA_AUTOPAYMENTS_REQUIRE_CARD_BINDING', True)
+    )
+    await _initiate_yk_payment(
+        callback,
+        settings=settings,
+        session=session,
+        yookassa_service=yookassa_service,
+        i18n=i18n,
+        current_lang=current_lang,
+        get_text=get_text,
+        user_id=callback.from_user.id,
+        months=months,
+        price_rub=price_rub,
+        currency_code_for_yk="RUB",
+        save_payment_method=autopay_enabled and autopay_require_binding,
+        back_callback=f"addon_period:{package_key}:{months}",
+        description_override=f"Addon package {package_key} ({months}m)",
+        provider="yookassa-addon",
+        payment_target="addon",
+        addon_package_key=package_key,
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("pay_yk_upgrade:"))
+async def pay_yk_upgrade_handler(callback: types.CallbackQuery, settings: Settings, i18n_data: dict, yookassa_service: YooKassaService, session: AsyncSession):
+    current_lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
+    i18n: Optional[JsonI18n] = i18n_data.get("i18n_instance")
+    get_text = lambda key, **kwargs: i18n.gettext(current_lang, key, **kwargs) if i18n else key
+    if not i18n or not callback.message:
+        return
+    try:
+        _, months_str, price_str = callback.data.split(":")
+        months = int(months_str)
+        price_rub = float(price_str)
+    except Exception:
+        await callback.answer(get_text("error_try_again"), show_alert=True)
+        return
+    autopay_enabled = bool(settings.yookassa_autopayments_active)
+    saved_methods: List = []
+    if autopay_enabled:
+        try:
+            saved_methods = await user_billing_dal.list_user_payment_methods(
+                session, callback.from_user.id, provider="yookassa"
+            )
+        except Exception:
+            saved_methods = []
+    if autopay_enabled and saved_methods:
+        await callback.message.edit_text(
+            get_text("yookassa_autopay_flow_prompt"),
+            reply_markup=get_yk_autopay_choice_keyboard(
+                months,
+                price_rub,
+                current_lang,
+                i18n,
+                has_saved_cards=True,
+                saved_list_callback=f"pay_yk_upgrade_saved_list:{months}:{price_rub}:0",
+                new_card_callback=f"pay_yk_upgrade_new:{months}:{price_rub}",
+                back_callback=f"squad_upgrade_period:{months}",
+            ),
+        )
+        await callback.answer()
+        return
+    autopay_require_binding = bool(
+        getattr(settings, 'YOOKASSA_AUTOPAYMENTS_REQUIRE_CARD_BINDING', True)
+    )
+    await _initiate_yk_payment(
+        callback,
+        settings=settings,
+        session=session,
+        yookassa_service=yookassa_service,
+        i18n=i18n,
+        current_lang=current_lang,
+        get_text=get_text,
+        user_id=callback.from_user.id,
+        months=months,
+        price_rub=price_rub,
+        currency_code_for_yk="RUB",
+        save_payment_method=autopay_enabled and autopay_require_binding,
+        back_callback=f"squad_upgrade_period:{months}",
+        description_override=f"Squad upgrade ({months}m)",
+        provider="yookassa-upgrade",
+        payment_target="upgrade",
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("pay_yk_addon_new:"))
+async def pay_yk_addon_new_card_handler(callback: types.CallbackQuery, settings: Settings, i18n_data: dict, yookassa_service: YooKassaService, session: AsyncSession):
+    current_lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
+    i18n: Optional[JsonI18n] = i18n_data.get("i18n_instance")
+    get_text = lambda key, **kwargs: i18n.gettext(current_lang, key, **kwargs) if i18n else key
+    if not i18n or not callback.message:
+        return
+    _, a, b, c = callback.data.split(":")
+    if a.isdigit():
+        months = int(a)
+        price_rub = float(b)
+        package_key = c
+    else:
+        package_key = a
+        months = int(b)
+        price_rub = float(c)
+    await _initiate_yk_payment(
+        callback,
+        settings=settings,
+        session=session,
+        yookassa_service=yookassa_service,
+        i18n=i18n,
+        current_lang=current_lang,
+        get_text=get_text,
+        user_id=callback.from_user.id,
+        months=months,
+        price_rub=price_rub,
+        currency_code_for_yk="RUB",
+        save_payment_method=bool(settings.yookassa_autopayments_active),
+        back_callback=f"addon_period:{package_key}:{months}",
+        description_override=f"Addon package {package_key} ({months}m)",
+        provider="yookassa-addon",
+        payment_target="addon",
+        addon_package_key=package_key,
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("pay_yk_upgrade_new:"))
+async def pay_yk_upgrade_new_card_handler(callback: types.CallbackQuery, settings: Settings, i18n_data: dict, yookassa_service: YooKassaService, session: AsyncSession):
+    current_lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
+    i18n: Optional[JsonI18n] = i18n_data.get("i18n_instance")
+    get_text = lambda key, **kwargs: i18n.gettext(current_lang, key, **kwargs) if i18n else key
+    if not i18n or not callback.message:
+        return
+    _, months_str, price_str = callback.data.split(":")
+    months = int(months_str)
+    price_rub = float(price_str)
+    await _initiate_yk_payment(
+        callback,
+        settings=settings,
+        session=session,
+        yookassa_service=yookassa_service,
+        i18n=i18n,
+        current_lang=current_lang,
+        get_text=get_text,
+        user_id=callback.from_user.id,
+        months=months,
+        price_rub=price_rub,
+        currency_code_for_yk="RUB",
+        save_payment_method=bool(settings.yookassa_autopayments_active),
+        back_callback=f"squad_upgrade_period:{months}",
+        description_override=f"Squad upgrade ({months}m)",
+        provider="yookassa-upgrade",
+        payment_target="upgrade",
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("pay_yk_addon_saved_list:"))
+async def pay_yk_addon_saved_list_handler(callback: types.CallbackQuery, settings: Settings, i18n_data: dict, session: AsyncSession):
+    current_lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
+    i18n: Optional[JsonI18n] = i18n_data.get("i18n_instance")
+    get_text = lambda key, **kwargs: i18n.gettext(current_lang, key, **kwargs) if i18n else key
+    if not i18n or not callback.message:
+        return
+    _, months_str, price_str, page_str, package_key = callback.data.split(":")
+    months = int(months_str)
+    price_rub = float(price_str)
+    page = int(page_str)
+    saved_methods = await user_billing_dal.list_user_payment_methods(session, callback.from_user.id, provider="yookassa")
+    cards = [
+        (str(m.method_id), _format_saved_payment_method_title(get_text, m.card_network, m.card_last4, m.is_default))
+        for m in saved_methods
+    ]
+    await callback.message.edit_text(
+        get_text("yookassa_autopay_choose_saved_card"),
+        reply_markup=get_yk_saved_cards_keyboard(
+            cards,
+            months,
+            price_rub,
+            current_lang,
+            i18n,
+            page=page,
+            use_saved_prefix="pay_yk_addon_use_saved",
+            saved_list_prefix="pay_yk_addon_saved_list",
+            new_card_prefix="pay_yk_addon_new",
+            back_to_choice_prefix="pay_yk_addon",
+            context=package_key,
+        ),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("pay_yk_upgrade_saved_list:"))
+async def pay_yk_upgrade_saved_list_handler(callback: types.CallbackQuery, settings: Settings, i18n_data: dict, session: AsyncSession):
+    current_lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
+    i18n: Optional[JsonI18n] = i18n_data.get("i18n_instance")
+    get_text = lambda key, **kwargs: i18n.gettext(current_lang, key, **kwargs) if i18n else key
+    if not i18n or not callback.message:
+        return
+    _, months_str, price_str, page_str = callback.data.split(":")
+    months = int(months_str)
+    price_rub = float(price_str)
+    page = int(page_str)
+    saved_methods = await user_billing_dal.list_user_payment_methods(session, callback.from_user.id, provider="yookassa")
+    cards = [
+        (str(m.method_id), _format_saved_payment_method_title(get_text, m.card_network, m.card_last4, m.is_default))
+        for m in saved_methods
+    ]
+    await callback.message.edit_text(
+        get_text("yookassa_autopay_choose_saved_card"),
+        reply_markup=get_yk_saved_cards_keyboard(
+            cards,
+            months,
+            price_rub,
+            current_lang,
+            i18n,
+            page=page,
+            use_saved_prefix="pay_yk_upgrade_use_saved",
+            saved_list_prefix="pay_yk_upgrade_saved_list",
+            new_card_prefix="pay_yk_upgrade_new",
+            back_to_choice_prefix="pay_yk_upgrade",
+        ),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("pay_yk_addon_use_saved:"))
+async def pay_yk_addon_use_saved_handler(callback: types.CallbackQuery, settings: Settings, i18n_data: dict, yookassa_service: YooKassaService, session: AsyncSession):
+    current_lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
+    i18n: Optional[JsonI18n] = i18n_data.get("i18n_instance")
+    get_text = lambda key, **kwargs: i18n.gettext(current_lang, key, **kwargs) if i18n else key
+    if not i18n or not callback.message:
+        return
+    _, months_str, price_str, method_identifier, package_key = callback.data.split(":")
+    months = int(months_str)
+    price_rub = float(price_str)
+    saved_methods = await user_billing_dal.list_user_payment_methods(session, callback.from_user.id, provider="yookassa")
+    selected_method = next((m for m in saved_methods if str(m.method_id) == method_identifier or m.provider_payment_method_id == method_identifier), None)
+    if not selected_method:
+        await callback.answer(get_text("error_try_again"), show_alert=True)
+        return
+    await _initiate_yk_payment(
+        callback,
+        settings=settings,
+        session=session,
+        yookassa_service=yookassa_service,
+        i18n=i18n,
+        current_lang=current_lang,
+        get_text=get_text,
+        user_id=callback.from_user.id,
+        months=months,
+        price_rub=price_rub,
+        currency_code_for_yk="RUB",
+        save_payment_method=False,
+        back_callback=f"pay_yk_addon_saved_list:{months}:{price_rub}:0:{package_key}",
+        payment_method_id=selected_method.provider_payment_method_id,
+        selected_method_internal_id=selected_method.method_id,
+        description_override=f"Addon package {package_key} ({months}m)",
+        provider="yookassa-addon",
+        payment_target="addon",
+        addon_package_key=package_key,
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("pay_yk_upgrade_use_saved:"))
+async def pay_yk_upgrade_use_saved_handler(callback: types.CallbackQuery, settings: Settings, i18n_data: dict, yookassa_service: YooKassaService, session: AsyncSession):
+    current_lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
+    i18n: Optional[JsonI18n] = i18n_data.get("i18n_instance")
+    get_text = lambda key, **kwargs: i18n.gettext(current_lang, key, **kwargs) if i18n else key
+    if not i18n or not callback.message:
+        return
+    _, months_str, price_str, method_identifier = callback.data.split(":")
+    months = int(months_str)
+    price_rub = float(price_str)
+    saved_methods = await user_billing_dal.list_user_payment_methods(session, callback.from_user.id, provider="yookassa")
+    selected_method = next((m for m in saved_methods if str(m.method_id) == method_identifier or m.provider_payment_method_id == method_identifier), None)
+    if not selected_method:
+        await callback.answer(get_text("error_try_again"), show_alert=True)
+        return
+    await _initiate_yk_payment(
+        callback,
+        settings=settings,
+        session=session,
+        yookassa_service=yookassa_service,
+        i18n=i18n,
+        current_lang=current_lang,
+        get_text=get_text,
+        user_id=callback.from_user.id,
+        months=months,
+        price_rub=price_rub,
+        currency_code_for_yk="RUB",
+        save_payment_method=False,
+        back_callback=f"pay_yk_upgrade_saved_list:{months}:{price_rub}:0",
+        payment_method_id=selected_method.provider_payment_method_id,
+        selected_method_internal_id=selected_method.method_id,
+        description_override=f"Squad upgrade ({months}m)",
+        provider="yookassa-upgrade",
+        payment_target="upgrade",
+    )
+    await callback.answer()
 
 
 @router.callback_query(F.data.startswith("pay_yk_saved_list:"))

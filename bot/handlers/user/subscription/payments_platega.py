@@ -14,6 +14,72 @@ from db.dal import payment_dal
 router = Router(name="user_subscription_payments_platega_router")
 
 
+async def _start_platega_payment(
+    *,
+    callback: types.CallbackQuery,
+    settings: Settings,
+    i18n: Optional[JsonI18n],
+    current_lang: str,
+    platega_service: PlategaService,
+    session: AsyncSession,
+    months: int,
+    price_rub: float,
+    description: str,
+    provider: str,
+    back_callback: str,
+):
+    if not callback.message:
+        return
+    user_id = callback.from_user.id
+    currency_code = settings.DEFAULT_CURRENCY_SYMBOL or "RUB"
+    payment_record = await payment_dal.create_payment_record(
+        session,
+        {
+            "user_id": user_id,
+            "amount": price_rub,
+            "currency": currency_code,
+            "status": "pending_platega",
+            "description": description,
+            "subscription_duration_months": months,
+            "provider": provider,
+        },
+    )
+    await session.commit()
+    payload_meta = json.dumps({"payment_db_id": payment_record.payment_id, "user_id": user_id, "months": months})
+    success, response_data = await platega_service.create_transaction(
+        payment_db_id=payment_record.payment_id,
+        user_id=user_id,
+        months=months,
+        amount=price_rub,
+        currency=currency_code,
+        description=description,
+        payload=payload_meta,
+    )
+    if not success:
+        await payment_dal.update_payment_status_by_db_id(session, payment_record.payment_id, "failed_creation")
+        await session.commit()
+        return
+    transaction_id = response_data.get("transactionId") or response_data.get("id")
+    redirect_url = response_data.get("redirect") or response_data.get("url") or response_data.get("paymentUrl")
+    if not transaction_id or not redirect_url:
+        await payment_dal.update_payment_status_by_db_id(session, payment_record.payment_id, "failed_creation")
+        await session.commit()
+        return
+    await payment_dal.update_provider_payment_and_status(
+        session, payment_record.payment_id, str(transaction_id), str(response_data.get("status", payment_record.status))
+    )
+    await session.commit()
+    get_text = lambda key, **kwargs: i18n.gettext(current_lang, key, **kwargs) if i18n else key
+    await callback.message.edit_text(
+        get_text(key="payment_link_message", months=months),
+        reply_markup=get_payment_url_keyboard(
+            redirect_url, current_lang, i18n, back_callback=back_callback, back_text_key="back_to_payment_methods_button"
+        ),
+        disable_web_page_preview=False,
+    )
+    await callback.answer()
+
+
 @router.callback_query(F.data.startswith("pay_platega:"))
 async def pay_platega_callback_handler(
     callback: types.CallbackQuery,
@@ -58,138 +124,75 @@ async def pay_platega_callback_handler(
             pass
         return
 
-    user_id = callback.from_user.id
     payment_description = get_text("payment_description_subscription", months=months)
-    currency_code = settings.DEFAULT_CURRENCY_SYMBOL or "RUB"
-
-    payment_record_payload = {
-        "user_id": user_id,
-        "amount": price_rub,
-        "currency": currency_code,
-        "status": "pending_platega",
-        "description": payment_description,
-        "subscription_duration_months": months,
-        "provider": "platega",
-    }
-
-    try:
-        payment_record = await payment_dal.create_payment_record(session, payment_record_payload)
-        await session.commit()
-    except Exception as e_db_create:
-        await session.rollback()
-        logging.error(
-            f"Platega: failed to create payment record for user {user_id}: {e_db_create}",
-            exc_info=True,
-        )
-        try:
-            await callback.message.edit_text(get_text("error_creating_payment_record"))
-        except Exception:
-            pass
-        try:
-            await callback.answer(get_text("error_try_again"), show_alert=True)
-        except Exception:
-            pass
-        return
-
-    payload_meta = json.dumps(
-        {
-            "payment_db_id": payment_record.payment_id,
-            "user_id": user_id,
-            "months": months,
-        }
-    )
-
-    success, response_data = await platega_service.create_transaction(
-        payment_db_id=payment_record.payment_id,
-        user_id=user_id,
+    await _start_platega_payment(
+        callback=callback,
+        settings=settings,
+        i18n=i18n,
+        current_lang=current_lang,
+        platega_service=platega_service,
+        session=session,
         months=months,
-        amount=price_rub,
-        currency=currency_code,
+        price_rub=price_rub,
         description=payment_description,
-        payload=payload_meta,
+        provider="platega",
+        back_callback=f"subscribe_period:{months}",
+    )
+    return
+
+@router.callback_query(F.data.startswith("pay_platega_addon:"))
+async def pay_platega_addon_callback_handler(
+    callback: types.CallbackQuery,
+    settings: Settings,
+    i18n_data: dict,
+    platega_service: PlategaService,
+    session: AsyncSession,
+):
+    current_lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
+    i18n: Optional[JsonI18n] = i18n_data.get("i18n_instance")
+    if not i18n or not callback.message:
+        return
+    _, package_key, months_str, price_str = callback.data.split(":")
+    months = int(months_str)
+    await _start_platega_payment(
+        callback=callback,
+        settings=settings,
+        i18n=i18n,
+        current_lang=current_lang,
+        platega_service=platega_service,
+        session=session,
+        months=months,
+        price_rub=float(price_str),
+        description=f"Addon package {package_key} ({months}m)",
+        provider="platega-addon",
+        back_callback=f"addon_period:{package_key}:{months}",
     )
 
-    if success:
-        transaction_id = response_data.get("transactionId") or response_data.get("id")
-        redirect_url = (
-            response_data.get("redirect")
-            or response_data.get("url")
-            or response_data.get("paymentUrl")
-        )
-        provider_status = response_data.get("status", payment_record.status)
 
-        if transaction_id and redirect_url:
-            try:
-                await payment_dal.update_provider_payment_and_status(
-                    session,
-                    payment_record.payment_id,
-                    str(transaction_id),
-                    str(provider_status),
-                )
-                await session.commit()
-            except Exception as e_status:
-                await session.rollback()
-                logging.error(
-                    f"Platega: failed to store transaction id for payment {payment_record.payment_id}: {e_status}",
-                    exc_info=True,
-                )
-
-            try:
-                await callback.message.edit_text(
-                    get_text(key="payment_link_message", months=months),
-                    reply_markup=get_payment_url_keyboard(
-                        redirect_url,
-                        current_lang,
-                        i18n,
-                        back_callback=f"subscribe_period:{months}",
-                        back_text_key="back_to_payment_methods_button",
-                    ),
-                    disable_web_page_preview=False,
-                )
-            except Exception as e_edit:
-                logging.warning(f"Platega: failed to display payment link ({e_edit}), sending new message.")
-                try:
-                    await callback.message.answer(
-                        get_text(key="payment_link_message", months=months),
-                        reply_markup=get_payment_url_keyboard(
-                            redirect_url,
-                            current_lang,
-                            i18n,
-                            back_callback=f"subscribe_period:{months}",
-                            back_text_key="back_to_payment_methods_button",
-                        ),
-                        disable_web_page_preview=False,
-                    )
-                except Exception:
-                    pass
-            try:
-                await callback.answer()
-            except Exception:
-                pass
-            return
-
-        logging.error(
-            "Platega: transaction created but missing transaction id or payment link for payment %s. Response: %s",
-            payment_record.payment_id,
-            response_data,
-        )
-
-    try:
-        await payment_dal.update_payment_status_by_db_id(
-            session,
-            payment_record.payment_id,
-            "failed_creation",
-        )
-        await session.commit()
-    except Exception as e_status:
-        await session.rollback()
-        logging.error(f"Platega: failed to mark payment {payment_record.payment_id} as failed_creation: {e_status}", exc_info=True)
-
-    try:
-        await callback.message.edit_text(get_text("error_payment_gateway"))
-    except Exception:
-        pass
-    try:
-        await callback.answer(get_text("error_payment_gateway"), show_alert=True)
-    except Exception:
-        pass
+@router.callback_query(F.data.startswith("pay_platega_upgrade:"))
+async def pay_platega_upgrade_callback_handler(
+    callback: types.CallbackQuery,
+    settings: Settings,
+    i18n_data: dict,
+    platega_service: PlategaService,
+    session: AsyncSession,
+):
+    current_lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
+    i18n: Optional[JsonI18n] = i18n_data.get("i18n_instance")
+    if not i18n or not callback.message:
+        return
+    _, months_str, price_str = callback.data.split(":")
+    months = int(months_str)
+    await _start_platega_payment(
+        callback=callback,
+        settings=settings,
+        i18n=i18n,
+        current_lang=current_lang,
+        platega_service=platega_service,
+        session=session,
+        months=months,
+        price_rub=float(price_str),
+        description=f"Squad upgrade ({months}m)",
+        provider="platega-upgrade",
+        back_callback=f"squad_upgrade_period:{months}",
+    )

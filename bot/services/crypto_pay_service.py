@@ -13,6 +13,8 @@ from config.settings import Settings
 from bot.middlewares.i18n import JsonI18n
 from bot.services.subscription_service import SubscriptionService
 from bot.services.referral_service import ReferralService
+from bot.services.device_package_service import DevicePackageService
+from bot.services.squad_upgrade_service import SquadUpgradeService
 from bot.keyboards.inline.user_keyboards import get_connect_and_main_keyboard
 from bot.services.notification_service import NotificationService
 from db.dal import payment_dal, user_dal
@@ -30,6 +32,8 @@ class CryptoPayService:
         async_session_factory: sessionmaker,
         subscription_service: SubscriptionService,
         referral_service: ReferralService,
+        device_package_service: Optional[DevicePackageService] = None,
+        squad_upgrade_service: Optional[SquadUpgradeService] = None,
     ):
         self.bot = bot
         self.settings = settings
@@ -37,6 +41,8 @@ class CryptoPayService:
         self.async_session_factory = async_session_factory
         self.subscription_service = subscription_service
         self.referral_service = referral_service
+        self.device_package_service = device_package_service
+        self.squad_upgrade_service = squad_upgrade_service
         if token:
             net = Networks.TEST_NET if str(network).lower() == "testnet" else Networks.MAIN_NET
             self.client = AioCryptoPay(token=token, network=net)
@@ -63,6 +69,8 @@ class CryptoPayService:
         months: int,
         amount: float,
         description: str,
+        payment_target: str = "subscription",
+        package_key: Optional[str] = None,
     ) -> Optional[str]:
         if not self.configured or not self.client:
             logging.error("CryptoPayService not configured")
@@ -79,7 +87,7 @@ class CryptoPayService:
                     "status": "pending_cryptopay",
                     "description": description,
                     "subscription_duration_months": months,
-                    "provider": "cryptopay",
+                    "provider": f"cryptopay-{payment_target}" if payment_target != "subscription" else "cryptopay",
                 },
             )
             await session.commit()
@@ -94,6 +102,8 @@ class CryptoPayService:
             "user_id": str(user_id),
             "subscription_months": str(months),
             "payment_db_id": str(payment_record.payment_id),
+            "payment_target": payment_target,
+            "addon_package_key": package_key or "",
         })
         try:
             invoice = await self.client.create_invoice(
@@ -134,6 +144,8 @@ class CryptoPayService:
             user_id = int(meta["user_id"])
             months = int(meta["subscription_months"])
             payment_db_id = int(meta["payment_db_id"])
+            payment_target = str(meta.get("payment_target") or "subscription")
+            addon_package_key = str(meta.get("addon_package_key") or "")
         except Exception as e:
             logging.error(f"Failed to parse CryptoPay payload: {e}")
             return
@@ -153,21 +165,23 @@ class CryptoPayService:
                     str(invoice.invoice_id),
                     "succeeded",
                 )
-                activation = await subscription_service.activate_subscription(
-                    session,
-                    user_id,
-                    months,
-                    float(invoice.amount),
-                    payment_db_id,
-                    provider="cryptopay",
-                )
-                referral_bonus = await referral_service.apply_referral_bonuses_for_payment(
-                    session,
-                    user_id,
-                    months,
-                    current_payment_db_id=payment_db_id,
-                    skip_if_active_before_payment=False,
-                )
+                if payment_target == "addon" and self.device_package_service:
+                    activation = {"end_date": await self.device_package_service.activate_paid_package(
+                        session, user_id, payment_db_id, package_key=addon_package_key, months=months
+                    )}
+                    referral_bonus = None
+                elif payment_target == "upgrade" and self.squad_upgrade_service:
+                    activation = {"end_date": await self.squad_upgrade_service.activate_paid_upgrade(
+                        session, user_id, payment_db_id, duration_days=months * 30
+                    )}
+                    referral_bonus = None
+                else:
+                    activation = await subscription_service.activate_subscription(
+                        session, user_id, months, float(invoice.amount), payment_db_id, provider="cryptopay"
+                    )
+                    referral_bonus = await referral_service.apply_referral_bonuses_for_payment(
+                        session, user_id, months, current_payment_db_id=payment_db_id, skip_if_active_before_payment=False
+                    )
                 await session.commit()
             except Exception as e:
                 await session.rollback()
@@ -186,7 +200,11 @@ class CryptoPayService:
                 final_end = referral_bonus["referee_new_end_date"]
                 applied_days = referral_bonus.get("referee_bonus_applied_days", 0)
 
-            if applied_days:
+            if payment_target == "addon":
+                text = _("extra_devices_purchase_success", end_date=final_end.strftime('%Y-%m-%d'))
+            elif payment_target == "upgrade":
+                text = _("squad_upgrade_purchase_success", end_date=final_end.strftime('%Y-%m-%d'))
+            elif applied_days:
                 inviter_name_display = _("friend_placeholder")
                 if db_user and db_user.referred_by_id:
                     inviter = await user_dal.get_user_by_id(session, db_user.referred_by_id)

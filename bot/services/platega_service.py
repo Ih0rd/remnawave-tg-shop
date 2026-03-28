@@ -11,6 +11,8 @@ from config.settings import Settings
 from bot.middlewares.i18n import JsonI18n
 from bot.services.subscription_service import SubscriptionService
 from bot.services.referral_service import ReferralService
+from bot.services.device_package_service import DevicePackageService
+from bot.services.squad_upgrade_service import SquadUpgradeService
 from bot.keyboards.inline.user_keyboards import get_connect_and_main_keyboard
 from bot.services.notification_service import NotificationService
 from db.dal import payment_dal, user_dal
@@ -27,6 +29,8 @@ class PlategaService:
         async_session_factory: sessionmaker,
         subscription_service: SubscriptionService,
         referral_service: ReferralService,
+        device_package_service: Optional[DevicePackageService] = None,
+        squad_upgrade_service: Optional[SquadUpgradeService] = None,
         default_return_url: str,
     ):
         self.bot = bot
@@ -35,6 +39,8 @@ class PlategaService:
         self.async_session_factory = async_session_factory
         self.subscription_service = subscription_service
         self.referral_service = referral_service
+        self.device_package_service = device_package_service
+        self.squad_upgrade_service = squad_upgrade_service
 
         self.base_url = (settings.PLATEGA_BASE_URL or "https://app.platega.io").rstrip("/")
         self.merchant_id = settings.PLATEGA_MERCHANT_ID
@@ -181,22 +187,24 @@ class PlategaService:
                         "succeeded",
                     )
 
-                    activation = await self.subscription_service.activate_subscription(
-                        session,
-                        payment.user_id,
-                        payment_months,
-                        float(payment.amount),
-                        payment.payment_id,
-                        provider="platega",
-                    )
-
-                    referral_bonus = await self.referral_service.apply_referral_bonuses_for_payment(
-                        session,
-                        payment.user_id,
-                        payment_months,
-                        current_payment_db_id=payment.payment_id,
-                        skip_if_active_before_payment=False,
-                    )
+                    if (payment.provider or "").endswith("-addon") and self.device_package_service:
+                        package_key = (payment.description or "").split(" ")[2] if payment.description else ""
+                        activation = {"end_date": await self.device_package_service.activate_paid_package(
+                            session, payment.user_id, payment.payment_id, package_key=package_key, months=payment_months
+                        )}
+                        referral_bonus = None
+                    elif (payment.provider or "").endswith("-upgrade") and self.squad_upgrade_service:
+                        activation = {"end_date": await self.squad_upgrade_service.activate_paid_upgrade(
+                            session, payment.user_id, payment.payment_id, duration_days=payment_months * 30
+                        )}
+                        referral_bonus = None
+                    else:
+                        activation = await self.subscription_service.activate_subscription(
+                            session, payment.user_id, payment_months, float(payment.amount), payment.payment_id, provider="platega"
+                        )
+                        referral_bonus = await self.referral_service.apply_referral_bonuses_for_payment(
+                            session, payment.user_id, payment_months, current_payment_db_id=payment.payment_id, skip_if_active_before_payment=False
+                        )
 
                     await session.commit()
                 except Exception as exc:
@@ -221,7 +229,11 @@ class PlategaService:
                     final_end = referral_bonus["referee_new_end_date"]
                     applied_days = referral_bonus.get("referee_bonus_applied_days", 0)
 
-                if applied_days:
+                if (payment.provider or "").endswith("-addon"):
+                    text = _("extra_devices_purchase_success", end_date=final_end.strftime("%Y-%m-%d") if final_end else "")
+                elif (payment.provider or "").endswith("-upgrade"):
+                    text = _("squad_upgrade_purchase_success", end_date=final_end.strftime("%Y-%m-%d") if final_end else "")
+                elif applied_days:
                     inviter_name_display = _("friend_placeholder")
                     if db_user and db_user.referred_by_id:
                         inviter = await user_dal.get_user_by_id(session, db_user.referred_by_id)
