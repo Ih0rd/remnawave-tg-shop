@@ -292,6 +292,20 @@ async def handle_successful_stars_payment(
                 i18n: Optional[JsonI18n] = i18n_data.get("i18n_instance")
                 _ = lambda key, **kwargs: i18n.gettext(lang, key, **kwargs) if i18n else key
                 await message.answer(_("squad_upgrade_purchase_success", end_date=expires_at.strftime("%Y-%m-%d")))
+                try:
+                    i18n_instance: Optional[JsonI18n] = i18n_data.get("i18n_instance")
+                    notification_service = NotificationService(message.bot, settings, i18n_instance)
+                    user = await user_dal.get_user_by_id(session, message.from_user.id)
+                    await notification_service.notify_payment_received(
+                        user_id=message.from_user.id,
+                        amount=float(stars_amount),
+                        currency="XTR",
+                        months=months,
+                        payment_provider="stars",
+                        username=user.username if user else None,
+                    )
+                except Exception:
+                    pass
         except Exception:
             await session.rollback()
         return
