@@ -1135,7 +1135,8 @@ async def unban_user_prompt_handler(callback: types.CallbackQuery,
 
 async def view_banned_users_handler(callback: types.CallbackQuery,
                                   state: FSMContext, i18n_data: dict,
-                                  settings: Settings, session: AsyncSession):
+                                  settings: Settings, session: AsyncSession,
+                                  page: int = 0):
     """Display list of banned users"""
     current_lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
     i18n: Optional[JsonI18n] = i18n_data.get("i18n_instance")
@@ -1145,32 +1146,42 @@ async def view_banned_users_handler(callback: types.CallbackQuery,
     _ = lambda key, **kwargs: i18n.gettext(current_lang, key, **kwargs)
 
     try:
-        # Get banned users
-        banned_users = await user_dal.get_banned_users(session)
-        
-        if not banned_users:
+        # Get paginated banned users
+        from bot.keyboards.inline.admin_keyboards import get_banned_users_keyboard
+
+        page_size = settings.LOGS_PAGE_SIZE
+        banned_users = await user_dal.get_banned_users_paginated(
+            session, page=page, page_size=page_size
+        )
+        total_banned = await user_dal.count_banned_users(session)
+        total_pages = max(1, (total_banned + page_size - 1) // page_size)
+
+        if total_banned == 0:
             message_text = _(
                 "admin_banned_users_empty",
                 default="📋 Заблокированные пользователи\n\nСписок пуст"
             )
+            keyboard = get_back_to_admin_panel_keyboard(current_lang, i18n)
         else:
-            user_list = []
-            for user in banned_users:
-                display_name = user.first_name or "Unknown"
-                if user.username:
-                    display_name = f"@{user.username}"
-                user_list.append(f"• {display_name} (ID: {user.user_id})")
-            
             message_text = _(
                 "admin_banned_users_list",
-                default="📋 Заблокированные пользователи ({count}):\n\n{users}",
-                count=len(banned_users),
-                users="\n".join(user_list)
+                default="📋 Заблокированные пользователи\n\nСтраница {current}/{total} ({count} пользователей)",
+                current=page + 1,
+                total=total_pages,
+                count=total_banned
+            )
+            keyboard = get_banned_users_keyboard(
+                banned_users=banned_users,
+                current_page=page,
+                total_banned=total_banned,
+                i18n_instance=i18n,
+                lang=current_lang,
+                settings=settings,
             )
 
         await callback.message.edit_text(
             message_text,
-            reply_markup=get_back_to_admin_panel_keyboard(current_lang, i18n)
+            reply_markup=keyboard
         )
         
     except Exception as e:

@@ -117,9 +117,12 @@ async def admin_panel_actions_callback_handler(
         await admin_user_management_handlers.user_search_prompt_handler(
             callback, state, i18n_data, settings, session)
     elif action == "view_banned":
-
+        try:
+            page = int(action_parts[2]) if len(action_parts) > 2 else 0
+        except ValueError:
+            page = 0
         await admin_user_mgmnt_handlers.view_banned_users_handler(
-            callback, state, i18n_data, settings, session)
+            callback, state, i18n_data, settings, session, page)
     elif action == "view_logs_menu":
         await admin_logs_handlers.display_logs_menu(callback, i18n_data,
                                                     settings, session)

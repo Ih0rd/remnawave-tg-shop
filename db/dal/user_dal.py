@@ -174,6 +174,32 @@ async def get_banned_users(session: AsyncSession) -> List[User]:
     return result.scalars().all()
 
 
+async def get_banned_users_paginated(
+    session: AsyncSession, *, page: int = 0, page_size: int = 15
+) -> List[User]:
+    """Return a slice of banned users ordered by newest registration first."""
+    safe_page = max(page, 0)
+    safe_page_size = max(page_size, 1)
+
+    stmt = (
+        select(User)
+        .where(User.is_banned == True)
+        .order_by(User.registration_date.desc())
+        .offset(safe_page * safe_page_size)
+        .limit(safe_page_size)
+    )
+    result = await session.execute(stmt)
+    return result.scalars().all()
+
+
+async def count_banned_users(session: AsyncSession) -> int:
+    """Count total number of banned users."""
+    result = await session.execute(
+        select(func.count(User.user_id)).where(User.is_banned == True)
+    )
+    return result.scalar_one()
+
+
 async def get_all_users_paginated(
     session: AsyncSession, *, page: int = 0, page_size: int = 15
 ) -> List[User]:

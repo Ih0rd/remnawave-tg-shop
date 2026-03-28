@@ -81,10 +81,12 @@ def get_ban_management_keyboard(i18n_instance, lang: str) -> InlineKeyboardMarku
                    callback_data="admin_action:unban_user_prompt")
     builder.button(text=_(key="admin_view_banned_users_button"),
                    callback_data="admin_action:view_banned:0")
+    builder.button(text=_(key="admin_sync_blacklist_button", default="🚫 Sync Telegram blacklist"),
+                   callback_data="admin_action:sync_telegram_blacklist")
     
     builder.button(text=_(key="back_to_user_management_button"),
                    callback_data="admin_section:user_management")
-    builder.adjust(2, 1, 1)
+    builder.adjust(2, 2, 1)
     return builder.as_markup()
 
 
