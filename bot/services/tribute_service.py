@@ -437,6 +437,19 @@ class TributeService:
             )
         except Exception as e:
             logging.error(f"Failed to send Tribute squad upgrade success message to user {user_id}: {e}")
+        try:
+            notification_service = NotificationService(bot, settings, i18n)
+            user = await user_dal.get_user_by_id(session, user_id)
+            await notification_service.notify_payment_received(
+                user_id=user_id,
+                amount=amount_float,
+                currency=currency,
+                months=months,
+                payment_provider="tribute-upgrade",
+                username=user.username if user else None,
+            )
+        except Exception as e:
+            logging.error(f"Failed to send tribute squad upgrade payment notification: {e}")
 
     async def _handle_tribute_paid_subscription_event(
         self,
