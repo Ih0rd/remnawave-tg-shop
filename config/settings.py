@@ -138,6 +138,24 @@ class Settings(BaseSettings):
     REFERRAL_BONUS_DAYS_REFEREE_12_MONTHS: Optional[int] = Field(
         default=15, alias="REFEREE_BONUS_DAYS_12_MONTHS")
 
+    REFERRAL_BONUS_LTE_DAYS_INVITER_1_MONTH: Optional[int] = Field(
+        default=None, alias="REFERRAL_BONUS_LTE_DAYS_INVITER_1_MONTH")
+    REFERRAL_BONUS_LTE_DAYS_INVITER_3_MONTHS: Optional[int] = Field(
+        default=None, alias="REFERRAL_BONUS_LTE_DAYS_INVITER_3_MONTHS")
+    REFERRAL_BONUS_LTE_DAYS_INVITER_6_MONTHS: Optional[int] = Field(
+        default=None, alias="REFERRAL_BONUS_LTE_DAYS_INVITER_6_MONTHS")
+    REFERRAL_BONUS_LTE_DAYS_INVITER_12_MONTHS: Optional[int] = Field(
+        default=None, alias="REFERRAL_BONUS_LTE_DAYS_INVITER_12_MONTHS")
+
+    REFERRAL_BONUS_LTE_DAYS_REFEREE_1_MONTH: Optional[int] = Field(
+        default=None, alias="REFERRAL_BONUS_LTE_DAYS_REFEREE_1_MONTH")
+    REFERRAL_BONUS_LTE_DAYS_REFEREE_3_MONTHS: Optional[int] = Field(
+        default=None, alias="REFERRAL_BONUS_LTE_DAYS_REFEREE_3_MONTHS")
+    REFERRAL_BONUS_LTE_DAYS_REFEREE_6_MONTHS: Optional[int] = Field(
+        default=None, alias="REFERRAL_BONUS_LTE_DAYS_REFEREE_6_MONTHS")
+    REFERRAL_BONUS_LTE_DAYS_REFEREE_12_MONTHS: Optional[int] = Field(
+        default=None, alias="REFERRAL_BONUS_LTE_DAYS_REFEREE_12_MONTHS")
+
     # Referral program configuration
     REFERRAL_ONE_BONUS_PER_REFEREE: bool = Field(
         default=True,
@@ -487,6 +505,34 @@ class Settings(BaseSettings):
 
     @computed_field
     @property
+    def referral_lte_bonus_inviter(self) -> Dict[int, int]:
+        bonuses: Dict[int, int] = {}
+        if self.REFERRAL_BONUS_LTE_DAYS_INVITER_1_MONTH is not None:
+            bonuses[1] = self.REFERRAL_BONUS_LTE_DAYS_INVITER_1_MONTH
+        if self.REFERRAL_BONUS_LTE_DAYS_INVITER_3_MONTHS is not None:
+            bonuses[3] = self.REFERRAL_BONUS_LTE_DAYS_INVITER_3_MONTHS
+        if self.REFERRAL_BONUS_LTE_DAYS_INVITER_6_MONTHS is not None:
+            bonuses[6] = self.REFERRAL_BONUS_LTE_DAYS_INVITER_6_MONTHS
+        if self.REFERRAL_BONUS_LTE_DAYS_INVITER_12_MONTHS is not None:
+            bonuses[12] = self.REFERRAL_BONUS_LTE_DAYS_INVITER_12_MONTHS
+        return bonuses
+
+    @computed_field
+    @property
+    def referral_lte_bonus_referee(self) -> Dict[int, int]:
+        bonuses: Dict[int, int] = {}
+        if self.REFERRAL_BONUS_LTE_DAYS_REFEREE_1_MONTH is not None:
+            bonuses[1] = self.REFERRAL_BONUS_LTE_DAYS_REFEREE_1_MONTH
+        if self.REFERRAL_BONUS_LTE_DAYS_REFEREE_3_MONTHS is not None:
+            bonuses[3] = self.REFERRAL_BONUS_LTE_DAYS_REFEREE_3_MONTHS
+        if self.REFERRAL_BONUS_LTE_DAYS_REFEREE_6_MONTHS is not None:
+            bonuses[6] = self.REFERRAL_BONUS_LTE_DAYS_REFEREE_6_MONTHS
+        if self.REFERRAL_BONUS_LTE_DAYS_REFEREE_12_MONTHS is not None:
+            bonuses[12] = self.REFERRAL_BONUS_LTE_DAYS_REFEREE_12_MONTHS
+        return bonuses
+
+    @computed_field
+    @property
     def yookassa_autopayments_active(self) -> bool:
         """Autopay features are available only when YooKassa itself is enabled."""
         return bool(self.YOOKASSA_ENABLED and self.YOOKASSA_AUTOPAYMENTS_ENABLED)
@@ -617,6 +663,10 @@ class Settings(BaseSettings):
         'SQUAD_UPGRADE_RUB_PRICE_MONTH_6', 'SQUAD_UPGRADE_RUB_PRICE_MONTH_12',
         'SQUAD_UPGRADE_STARS_PRICE_MONTH_1', 'SQUAD_UPGRADE_STARS_PRICE_MONTH_3',
         'SQUAD_UPGRADE_STARS_PRICE_MONTH_6', 'SQUAD_UPGRADE_STARS_PRICE_MONTH_12',
+        'REFERRAL_BONUS_LTE_DAYS_INVITER_1_MONTH', 'REFERRAL_BONUS_LTE_DAYS_INVITER_3_MONTHS',
+        'REFERRAL_BONUS_LTE_DAYS_INVITER_6_MONTHS', 'REFERRAL_BONUS_LTE_DAYS_INVITER_12_MONTHS',
+        'REFERRAL_BONUS_LTE_DAYS_REFEREE_1_MONTH', 'REFERRAL_BONUS_LTE_DAYS_REFEREE_3_MONTHS',
+        'REFERRAL_BONUS_LTE_DAYS_REFEREE_6_MONTHS', 'REFERRAL_BONUS_LTE_DAYS_REFEREE_12_MONTHS',
         mode='before'
     )
     @classmethod

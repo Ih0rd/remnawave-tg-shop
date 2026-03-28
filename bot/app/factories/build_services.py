@@ -31,7 +31,7 @@ def build_core_services(
     device_package_service = DevicePackageService(settings, panel_service, bot, i18n)
     squad_upgrade_service = SquadUpgradeService(settings, panel_service, bot, i18n)
     subscription_service = SubscriptionService(settings, panel_service, bot, i18n)
-    referral_service = ReferralService(settings, subscription_service, bot, i18n)
+    referral_service = ReferralService(settings, subscription_service, bot, i18n, squad_upgrade_service=squad_upgrade_service)
     promo_code_service = PromoCodeService(
         settings,
         subscription_service,

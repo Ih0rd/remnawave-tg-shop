@@ -12,17 +12,20 @@ from db.models import User
 from db.dal import subscription_dal
 from bot.middlewares.i18n import JsonI18n
 from .subscription_service import SubscriptionService
+from .squad_upgrade_service import SquadUpgradeService
 
 
 class ReferralService:
 
     def __init__(self, settings: Settings,
                  subscription_service: SubscriptionService, bot: Bot,
-                 i18n: JsonI18n):
+                 i18n: JsonI18n,
+                 squad_upgrade_service: Optional[SquadUpgradeService] = None):
         self.settings = settings
         self.subscription_service = subscription_service
         self.bot = bot
         self.i18n = i18n
+        self.squad_upgrade_service = squad_upgrade_service
 
     async def apply_referral_bonuses_for_payment(
             self,
@@ -96,6 +99,10 @@ class ReferralService:
             inviter_bonus_days = self.settings.referral_bonus_inviter.get(
                 purchased_subscription_months)
             referee_bonus_days = self.settings.referral_bonus_referee.get(
+                purchased_subscription_months)
+            inviter_lte_bonus_days = self.settings.referral_lte_bonus_inviter.get(
+                purchased_subscription_months)
+            referee_lte_bonus_days = self.settings.referral_lte_bonus_referee.get(
                 purchased_subscription_months)
 
             if inviter_bonus_days and inviter_bonus_days > 0:
@@ -222,6 +229,53 @@ class ReferralService:
                                     logging.error(
                                         f"Failed to create new bonus subscription for inviter {inviter_user_id}: {e_create_bonus_sub}",
                                         exc_info=True)
+
+            if inviter_lte_bonus_days and inviter_lte_bonus_days > 0 and self.squad_upgrade_service:
+                try:
+                    inviter_lte_expires_at = await self.squad_upgrade_service.activate_paid_upgrade(
+                        session,
+                        user_id=inviter_user_id,
+                        duration_days=inviter_lte_bonus_days,
+                        provider="referral_bonus",
+                    )
+                    if inviter_lte_expires_at:
+                        inviter_bonus_successfully_applied = True
+                        logging.info(
+                            "LTE referral bonus for inviter %s applied for %s days until %s",
+                            inviter_user_id,
+                            inviter_lte_bonus_days,
+                            inviter_lte_expires_at.isoformat(),
+                        )
+                except Exception as e_inv_lte:
+                    logging.error(
+                        "Failed to apply inviter LTE referral bonus for %s: %s",
+                        inviter_user_id,
+                        e_inv_lte,
+                        exc_info=True,
+                    )
+
+            if referee_lte_bonus_days and referee_lte_bonus_days > 0 and self.squad_upgrade_service:
+                try:
+                    referee_lte_expires_at = await self.squad_upgrade_service.activate_paid_upgrade(
+                        session,
+                        user_id=referee_user_id,
+                        duration_days=referee_lte_bonus_days,
+                        provider="referral_bonus",
+                    )
+                    if referee_lte_expires_at:
+                        logging.info(
+                            "LTE referral bonus for referee %s applied for %s days until %s",
+                            referee_user_id,
+                            referee_lte_bonus_days,
+                            referee_lte_expires_at.isoformat(),
+                        )
+                except Exception as e_ref_lte:
+                    logging.error(
+                        "Failed to apply referee LTE referral bonus for %s: %s",
+                        referee_user_id,
+                        e_ref_lte,
+                        exc_info=True,
+                    )
 
             if referee_bonus_days and referee_bonus_days > 0:
 
