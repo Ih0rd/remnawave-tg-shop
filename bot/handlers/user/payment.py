@@ -18,6 +18,8 @@ from bot.services.subscription_service import SubscriptionService
 from bot.services.referral_service import ReferralService
 from bot.services.panel_api_service import PanelApiService
 from bot.services.yookassa_service import YooKassaService
+from bot.services.device_package_service import DevicePackageService
+from bot.services.squad_upgrade_service import SquadUpgradeService
 from bot.middlewares.i18n import JsonI18n
 from config.settings import Settings
 from bot.services.notification_service import NotificationService
@@ -36,7 +38,9 @@ async def process_successful_payment(session: AsyncSession, bot: Bot,
                                      i18n: JsonI18n, settings: Settings,
                                      panel_service: PanelApiService,
                                      subscription_service: SubscriptionService,
-                                     referral_service: ReferralService):
+                                     referral_service: ReferralService,
+                                     device_package_service: Optional[DevicePackageService] = None,
+                                     squad_upgrade_service: Optional[SquadUpgradeService] = None):
     metadata = payment_info_from_webhook.get("metadata", {})
     user_id_str = metadata.get("user_id")
     subscription_months_str = metadata.get("subscription_months")
@@ -44,6 +48,8 @@ async def process_successful_payment(session: AsyncSession, bot: Bot,
     payment_db_id_str = metadata.get("payment_db_id")
     auto_renew_subscription_id_str = metadata.get(
         "auto_renew_for_subscription_id")
+    payment_target = metadata.get("payment_target", "subscription")
+    addon_package_key = metadata.get("addon_package_key")
 
     # For auto-renew payments, payment_db_id may be absent. In that case,
     # we will create/ensure a payment record idempotently using provider payment id.
@@ -196,14 +202,25 @@ async def process_successful_payment(session: AsyncSession, bot: Bot,
             raise Exception(
                 f"DB Error: Could not update payment record {payment_db_id}")
 
-        activation_details = await subscription_service.activate_subscription(
-            session,
-            user_id,
-            subscription_months,
-            payment_value,
-            payment_db_id,
-            promo_code_id_from_payment=promo_code_id,
-            provider="yookassa")
+        if payment_target == "addon" and device_package_service and addon_package_key:
+            addon_end = await device_package_service.activate_paid_package(
+                session, user_id, payment_db_id, package_key=str(addon_package_key), months=subscription_months
+            )
+            activation_details = {"end_date": addon_end, "subscription_url": None, "applied_promo_bonus_days": 0}
+        elif payment_target == "upgrade" and squad_upgrade_service:
+            upgrade_end = await squad_upgrade_service.activate_paid_upgrade(
+                session, user_id, payment_db_id, duration_days=subscription_months * 30
+            )
+            activation_details = {"end_date": upgrade_end, "subscription_url": None, "applied_promo_bonus_days": 0}
+        else:
+            activation_details = await subscription_service.activate_subscription(
+                session,
+                user_id,
+                subscription_months,
+                payment_value,
+                payment_db_id,
+                promo_code_id_from_payment=promo_code_id,
+                provider="yookassa")
 
         if not activation_details or not activation_details.get('end_date'):
             logging.error(
@@ -217,13 +234,15 @@ async def process_successful_payment(session: AsyncSession, bot: Bot,
         applied_promo_bonus_days = activation_details.get(
             "applied_promo_bonus_days", 0)
 
-        referral_bonus_info = await referral_service.apply_referral_bonuses_for_payment(
-            session,
-            user_id,
-            subscription_months,
-            current_payment_db_id=payment_db_id,
-            skip_if_active_before_payment=False,
-        )
+        referral_bonus_info = None
+        if payment_target == "subscription":
+            referral_bonus_info = await referral_service.apply_referral_bonuses_for_payment(
+                session,
+                user_id,
+                subscription_months,
+                current_payment_db_id=payment_db_id,
+                skip_if_active_before_payment=False,
+            )
         applied_referee_bonus_days_from_referral: Optional[int] = None
         if referral_bonus_info and referral_bonus_info.get(
                 "referee_new_end_date"):
@@ -237,7 +256,13 @@ async def process_successful_payment(session: AsyncSession, bot: Bot,
         _ = lambda key, **kwargs: i18n.gettext(user_lang, key, **kwargs)
 
         # For auto-renew charges, avoid re-sending config link; send concise message
-        if is_auto_renew and final_end_date_for_user:
+        if payment_target == "addon" and final_end_date_for_user:
+            details_message = _("extra_devices_purchase_success", end_date=final_end_date_for_user.strftime('%Y-%m-%d'))
+            details_markup = get_connect_and_main_keyboard(user_lang, i18n, settings, None, preserve_message=True)
+        elif payment_target == "upgrade" and final_end_date_for_user:
+            details_message = _("squad_upgrade_purchase_success", end_date=final_end_date_for_user.strftime('%Y-%m-%d'))
+            details_markup = get_connect_and_main_keyboard(user_lang, i18n, settings, None, preserve_message=True)
+        elif is_auto_renew and final_end_date_for_user:
             details_message = _(
                 "yookassa_auto_renewal",
                 months=subscription_months,
@@ -391,6 +416,8 @@ async def yookassa_webhook_route(request: web.Request):
         subscription_service: SubscriptionService = request.app[
             'subscription_service']
         referral_service: ReferralService = request.app['referral_service']
+        device_package_service: Optional[DevicePackageService] = request.app.get('device_package_service')
+        squad_upgrade_service: Optional[SquadUpgradeService] = request.app.get('squad_upgrade_service')
         async_session_factory: sessionmaker = request.app[
             'async_session_factory']
     except KeyError as e_app_ctx:
@@ -483,7 +510,8 @@ async def yookassa_webhook_route(request: web.Request):
                             await process_successful_payment(
                                 session, bot, payment_dict_for_processing,
                                 i18n_instance, settings, panel_service,
-                                subscription_service, referral_service)
+                                subscription_service, referral_service,
+                                device_package_service, squad_upgrade_service)
                             await session.commit()
                         else:
                             logging.warning(

@@ -50,6 +50,8 @@ def build_core_services(
         async_session_factory,
         subscription_service,
         referral_service,
+        device_package_service,
+        squad_upgrade_service,
     )
     freekassa_service = FreeKassaService(
         bot=bot,
@@ -58,6 +60,8 @@ def build_core_services(
         async_session_factory=async_session_factory,
         subscription_service=subscription_service,
         referral_service=referral_service,
+        device_package_service=device_package_service,
+        squad_upgrade_service=squad_upgrade_service,
     )
     tribute_service = TributeService(
         bot,
@@ -77,6 +81,8 @@ def build_core_services(
         async_session_factory=async_session_factory,
         subscription_service=subscription_service,
         referral_service=referral_service,
+        device_package_service=device_package_service,
+        squad_upgrade_service=squad_upgrade_service,
         default_return_url=bot_username_for_default_return,
     )
     severpay_service = SeverPayService(
@@ -86,6 +92,8 @@ def build_core_services(
         async_session_factory=async_session_factory,
         subscription_service=subscription_service,
         referral_service=referral_service,
+        device_package_service=device_package_service,
+        squad_upgrade_service=squad_upgrade_service,
         default_return_url=bot_username_for_default_return,
     )
     panel_webhook_service = PanelWebhookService(bot, settings, i18n, async_session_factory, panel_service)

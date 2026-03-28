@@ -181,6 +181,9 @@ def get_yk_autopay_choice_keyboard(
     lang: str,
     i18n_instance,
     has_saved_cards: bool = True,
+    saved_list_callback: Optional[str] = None,
+    new_card_callback: Optional[str] = None,
+    back_callback: Optional[str] = None,
 ) -> InlineKeyboardMarkup:
     """Keyboard for choosing between saved card charge or new card payment when auto-renew is enabled."""
     _ = lambda key, **kwargs: i18n_instance.gettext(lang, key, **kwargs)
@@ -190,19 +193,19 @@ def get_yk_autopay_choice_keyboard(
         builder.row(
             InlineKeyboardButton(
                 text=_(key="yookassa_autopay_pay_saved_card_button"),
-                callback_data=f"pay_yk_saved_list:{months}:{price_str}",
+                callback_data=saved_list_callback or f"pay_yk_saved_list:{months}:{price_str}",
             )
         )
     builder.row(
         InlineKeyboardButton(
             text=_(key="yookassa_autopay_pay_new_card_button"),
-            callback_data=f"pay_yk_new:{months}:{price_str}",
+            callback_data=new_card_callback or f"pay_yk_new:{months}:{price_str}",
         )
     )
     builder.row(
         InlineKeyboardButton(
             text=_(key="back_to_payment_methods_button"),
-            callback_data=f"subscribe_period:{months}",
+            callback_data=back_callback or f"subscribe_period:{months}",
         )
     )
     return builder.as_markup()
@@ -215,6 +218,11 @@ def get_yk_saved_cards_keyboard(
     lang: str,
     i18n_instance,
     page: int = 0,
+    use_saved_prefix: str = "pay_yk_use_saved",
+    saved_list_prefix: str = "pay_yk_saved_list",
+    new_card_prefix: str = "pay_yk_new",
+    back_to_choice_prefix: str = "pay_yk",
+    context: str = "",
 ) -> InlineKeyboardMarkup:
     """Paginated keyboard for selecting a saved YooKassa card."""
     _ = lambda key, **kwargs: i18n_instance.gettext(lang, key, **kwargs)
@@ -226,41 +234,54 @@ def get_yk_saved_cards_keyboard(
     price_str = str(price)
 
     for method_id, title in cards[start:end]:
+        callback_data = f"{use_saved_prefix}:{months}:{price_str}:{method_id}"
+        if context:
+            callback_data = f"{callback_data}:{context}"
         builder.row(
             InlineKeyboardButton(
                 text=title,
-                callback_data=f"pay_yk_use_saved:{months}:{price_str}:{method_id}",
+                callback_data=callback_data,
             )
         )
 
     nav_buttons: List[InlineKeyboardButton] = []
+    prev_cb = f"{saved_list_prefix}:{months}:{price_str}:{max(page-1,0)}"
+    next_cb = f"{saved_list_prefix}:{months}:{price_str}:{page+1}"
+    if context:
+        prev_cb = f"{prev_cb}:{context}"
+        next_cb = f"{next_cb}:{context}"
     if start > 0:
         nav_buttons.append(
             InlineKeyboardButton(
                 text="⬅️",
-                callback_data=f"pay_yk_saved_list:{months}:{price_str}:{page-1}",
+                callback_data=prev_cb,
             )
         )
     if end < total:
         nav_buttons.append(
             InlineKeyboardButton(
                 text="➡️",
-                callback_data=f"pay_yk_saved_list:{months}:{price_str}:{page+1}",
+                callback_data=next_cb,
             )
         )
     if nav_buttons:
         builder.row(*nav_buttons)
 
+    new_card_callback = f"{new_card_prefix}:{months}:{price_str}"
+    back_callback = f"{back_to_choice_prefix}:{months}:{price_str}"
+    if context:
+        new_card_callback = f"{new_card_callback}:{context}"
+        back_callback = f"{back_callback}:{context}"
     builder.row(
         InlineKeyboardButton(
             text=_(key="yookassa_autopay_pay_new_card_button"),
-            callback_data=f"pay_yk_new:{months}:{price_str}",
+            callback_data=new_card_callback,
         )
     )
     builder.row(
         InlineKeyboardButton(
             text=_(key="back_to_autopay_method_choice_button"),
-            callback_data=f"pay_yk:{months}:{price_str}",
+            callback_data=back_callback,
         )
     )
     return builder.as_markup()

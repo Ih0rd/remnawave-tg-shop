@@ -98,3 +98,94 @@ async def pay_crypto_callback_handler(
         await callback.answer(get_text("error_payment_gateway"), show_alert=True)
     except Exception:
         pass
+
+
+@router.callback_query(F.data.startswith("pay_crypto_addon:"))
+async def pay_crypto_addon_callback_handler(
+    callback: types.CallbackQuery,
+    settings: Settings,
+    i18n_data: dict,
+    session: AsyncSession,
+    cryptopay_service: CryptoPayService,
+):
+    current_lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
+    i18n: Optional[JsonI18n] = i18n_data.get("i18n_instance")
+    get_text = (lambda key, **kwargs: i18n.gettext(current_lang, key, **kwargs) if i18n else key)
+    if not i18n or not callback.message:
+        return
+    try:
+        _, package_key, months_str, price_str = callback.data.split(":")
+        months = int(months_str)
+        price_amount = float(price_str)
+    except Exception:
+        await callback.answer(get_text("error_try_again"), show_alert=True)
+        return
+    invoice_url = await cryptopay_service.create_invoice(
+        session=session,
+        user_id=callback.from_user.id,
+        months=months,
+        amount=price_amount,
+        description=f"Addon package {package_key} ({months}m)",
+        payment_target="addon",
+        package_key=package_key,
+    )
+    if not invoice_url:
+        await callback.answer(get_text("error_payment_gateway"), show_alert=True)
+        return
+    await callback.message.edit_text(
+        get_text(key="payment_link_message", months=months),
+        reply_markup=get_payment_url_keyboard(
+            invoice_url,
+            current_lang,
+            i18n,
+            back_callback=f"addon_period:{package_key}:{months}",
+            back_text_key="back_to_payment_methods_button",
+        ),
+        disable_web_page_preview=False,
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("pay_crypto_upgrade:"))
+async def pay_crypto_upgrade_callback_handler(
+    callback: types.CallbackQuery,
+    settings: Settings,
+    i18n_data: dict,
+    session: AsyncSession,
+    cryptopay_service: CryptoPayService,
+):
+    current_lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
+    i18n: Optional[JsonI18n] = i18n_data.get("i18n_instance")
+    get_text = (lambda key, **kwargs: i18n.gettext(current_lang, key, **kwargs) if i18n else key)
+    if not i18n or not callback.message:
+        return
+    try:
+        _, months_str, price_str = callback.data.split(":")
+        months = int(months_str)
+        price_amount = float(price_str)
+    except Exception:
+        await callback.answer(get_text("error_try_again"), show_alert=True)
+        return
+    invoice_url = await cryptopay_service.create_invoice(
+        session=session,
+        user_id=callback.from_user.id,
+        months=months,
+        amount=price_amount,
+        description=f"Squad upgrade ({months}m)",
+        payment_target="upgrade",
+    )
+    if not invoice_url:
+        await callback.answer(get_text("error_payment_gateway"), show_alert=True)
+        return
+    await callback.message.edit_text(
+        get_text(key="payment_link_message", months=months),
+        reply_markup=get_payment_url_keyboard(
+            invoice_url,
+            current_lang,
+            i18n,
+            back_callback=f"squad_upgrade_period:{months}",
+            back_text_key="back_to_payment_methods_button",
+        ),
+        disable_web_page_preview=False,
+    )
+    await callback.answer()

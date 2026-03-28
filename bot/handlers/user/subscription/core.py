@@ -693,15 +693,42 @@ async def addon_payment_methods_menu(
         await callback.answer(get_text("extra_devices_unavailable_no_hwid_limit"), show_alert=True)
         return
     stars_price = package["stars_prices"].get(months)
+    rub_price = package["rub_prices"].get(months)
     tribute_link = package.get("tribute_link")
     rows = []
-    if stars_price is not None and settings.STARS_ENABLED:
-        rows.append([InlineKeyboardButton(
-            text=get_text("pay_with_stars_button") + f" · {stars_price}⭐",
-            callback_data=f"pay_stars_addon:{package_key}:{months}",
-        )])
-    if tribute_link and settings.TRIBUTE_ENABLED:
-        rows.append([InlineKeyboardButton(text=get_text("pay_with_tribute_button"), url=tribute_link)])
+    for method in settings.payment_methods_order:
+        if method == "severpay" and settings.SEVERPAY_ENABLED and rub_price is not None:
+            rows.append([InlineKeyboardButton(
+                text=get_text("pay_with_severpay_button"),
+                callback_data=f"pay_severpay_addon:{package_key}:{months}:{rub_price}",
+            )])
+        elif method == "freekassa" and settings.FREEKASSA_ENABLED and rub_price is not None:
+            rows.append([InlineKeyboardButton(
+                text=get_text("pay_with_sbp_button"),
+                callback_data=f"pay_fk_addon:{package_key}:{months}:{rub_price}",
+            )])
+        elif method == "platega" and settings.PLATEGA_ENABLED and rub_price is not None:
+            rows.append([InlineKeyboardButton(
+                text=get_text("pay_with_platega_button"),
+                callback_data=f"pay_platega_addon:{package_key}:{months}:{rub_price}",
+            )])
+        elif method == "yookassa" and settings.YOOKASSA_ENABLED and rub_price is not None:
+            rows.append([InlineKeyboardButton(
+                text=get_text("pay_with_yookassa_button"),
+                callback_data=f"pay_yk_addon:{package_key}:{months}:{rub_price}",
+            )])
+        elif method == "tribute" and settings.TRIBUTE_ENABLED and tribute_link:
+            rows.append([InlineKeyboardButton(text=get_text("pay_with_tribute_button"), url=tribute_link)])
+        elif method == "stars" and settings.STARS_ENABLED and stars_price is not None:
+            rows.append([InlineKeyboardButton(
+                text=get_text("pay_with_stars_button") + f" · {stars_price}⭐",
+                callback_data=f"pay_stars_addon:{package_key}:{months}",
+            )])
+        elif method == "cryptopay" and settings.CRYPTOPAY_ENABLED and rub_price is not None:
+            rows.append([InlineKeyboardButton(
+                text=get_text("pay_with_cryptopay_button"),
+                callback_data=f"pay_crypto_addon:{package_key}:{months}:{rub_price}",
+            )])
     rows.append([InlineKeyboardButton(text=get_text("back_to_main_menu_button"), callback_data=f"addon_pkg:{package_key}")])
     await callback.message.edit_text(
         get_text("extra_devices_payment_method_title", months=months),
@@ -766,15 +793,42 @@ async def squad_upgrade_payment_methods_menu(
     _, months_str = callback.data.split(":")
     months = int(months_str)
     stars_price = offer["stars_prices"].get(months)
+    rub_price = offer["rub_prices"].get(months)
     tribute_link = offer.get("tribute_link")
     rows = []
-    if stars_price is not None and settings.STARS_ENABLED:
-        rows.append([InlineKeyboardButton(
-            text=get_text("pay_with_stars_button") + f" · {stars_price}⭐",
-            callback_data=f"pay_stars_upgrade:{months}",
-        )])
-    if tribute_link and settings.TRIBUTE_ENABLED:
-        rows.append([InlineKeyboardButton(text=get_text("pay_with_tribute_button"), url=tribute_link)])
+    for method in settings.payment_methods_order:
+        if method == "severpay" and settings.SEVERPAY_ENABLED and rub_price is not None:
+            rows.append([InlineKeyboardButton(
+                text=get_text("pay_with_severpay_button"),
+                callback_data=f"pay_severpay_upgrade:{months}:{rub_price}",
+            )])
+        elif method == "freekassa" and settings.FREEKASSA_ENABLED and rub_price is not None:
+            rows.append([InlineKeyboardButton(
+                text=get_text("pay_with_sbp_button"),
+                callback_data=f"pay_fk_upgrade:{months}:{rub_price}",
+            )])
+        elif method == "platega" and settings.PLATEGA_ENABLED and rub_price is not None:
+            rows.append([InlineKeyboardButton(
+                text=get_text("pay_with_platega_button"),
+                callback_data=f"pay_platega_upgrade:{months}:{rub_price}",
+            )])
+        elif method == "yookassa" and settings.YOOKASSA_ENABLED and rub_price is not None:
+            rows.append([InlineKeyboardButton(
+                text=get_text("pay_with_yookassa_button"),
+                callback_data=f"pay_yk_upgrade:{months}:{rub_price}",
+            )])
+        elif method == "tribute" and settings.TRIBUTE_ENABLED and tribute_link:
+            rows.append([InlineKeyboardButton(text=get_text("pay_with_tribute_button"), url=tribute_link)])
+        elif method == "stars" and settings.STARS_ENABLED and stars_price is not None:
+            rows.append([InlineKeyboardButton(
+                text=get_text("pay_with_stars_button") + f" · {stars_price}⭐",
+                callback_data=f"pay_stars_upgrade:{months}",
+            )])
+        elif method == "cryptopay" and settings.CRYPTOPAY_ENABLED and rub_price is not None:
+            rows.append([InlineKeyboardButton(
+                text=get_text("pay_with_cryptopay_button"),
+                callback_data=f"pay_crypto_upgrade:{months}:{rub_price}",
+            )])
     rows.append([InlineKeyboardButton(text=get_text("back_to_main_menu_button"), callback_data="main_action:buy_squad_upgrade")])
     await callback.message.edit_text(
         get_text("squad_upgrade_payment_method_title", months=months),
