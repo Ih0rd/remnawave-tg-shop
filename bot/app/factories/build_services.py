@@ -17,6 +17,7 @@ from bot.services.platega_service import PlategaService
 from bot.services.severpay_service import SeverPayService
 from bot.services.device_package_service import DevicePackageService
 from bot.services.squad_upgrade_service import SquadUpgradeService
+from bot.services.telegram_blacklist_service import TelegramBlacklistService
 
 
 def build_core_services(
@@ -88,6 +89,7 @@ def build_core_services(
         default_return_url=bot_username_for_default_return,
     )
     panel_webhook_service = PanelWebhookService(bot, settings, i18n, async_session_factory, panel_service)
+    telegram_blacklist_service = TelegramBlacklistService(settings, panel_service)
     yookassa_service = YooKassaService(
         shop_id=settings.YOOKASSA_SHOP_ID,
         secret_key=settings.YOOKASSA_SECRET_KEY,
@@ -120,4 +122,5 @@ def build_core_services(
         "severpay_service": severpay_service,
         "device_package_service": device_package_service,
         "squad_upgrade_service": squad_upgrade_service,
+        "telegram_blacklist_service": telegram_blacklist_service,
     }

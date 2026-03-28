@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from config.settings import Settings
 from bot.services.panel_api_service import PanelApiService
 from bot.services.notification_service import NotificationService
+from bot.services.telegram_blacklist_service import TelegramBlacklistService
 
 from db.dal import user_dal, subscription_dal, panel_sync_dal
 from db.models import Subscription
@@ -427,6 +428,77 @@ async def perform_sync(
             "details": error_detail,
             "errors": [str(e_sync_global)],
         }
+
+
+async def sync_telegram_blacklist_handler(
+    message_event: Union[types.Message, types.CallbackQuery],
+    bot: Bot,
+    settings: Settings,
+    i18n_data: dict,
+    telegram_blacklist_service: TelegramBlacklistService,
+    session: AsyncSession,
+):
+    current_lang = i18n_data.get("current_language", settings.DEFAULT_LANGUAGE)
+    i18n: Optional[JsonI18n] = i18n_data.get("i18n_instance")
+    if not i18n:
+        if isinstance(message_event, types.Message):
+            await message_event.answer("Language error.")
+        elif isinstance(message_event, types.CallbackQuery):
+            await message_event.answer("Language error.", show_alert=True)
+        return
+
+    target_chat_id = (
+        message_event.chat.id
+        if isinstance(message_event, types.Message)
+        else (message_event.message.chat.id if message_event.message else None)
+    )
+    if not target_chat_id:
+        if isinstance(message_event, types.CallbackQuery):
+            await message_event.answer("Error initiating blacklist sync.", show_alert=True)
+        return
+
+    if isinstance(message_event, types.Message):
+        await message_event.answer("🔄 Запускаю синхронизацию Telegram blacklist...")
+
+    logging.info("Admin (%s) triggered Telegram blacklist sync.", message_event.from_user.id)
+
+    try:
+        sync_result = await telegram_blacklist_service.sync_blacklist(session)
+        await session.commit()
+
+        summary = (
+            "✅ Синхронизация Telegram blacklist завершена\n\n"
+            f"• IDs загружено: {sync_result.fetched_ids}\n"
+            f"• Новых банов: {sync_result.banned_users}\n"
+            f"• Уже заблокированы: {sync_result.already_banned}\n"
+            f"• Создано пользователей: {sync_result.users_created}\n"
+            f"• Отключено в панели: {sync_result.panel_disabled}\n"
+            f"• Ошибки: {sync_result.errors}"
+        )
+        await bot.send_message(target_chat_id, summary)
+    except Exception as e:
+        await session.rollback()
+        logging.error("Telegram blacklist sync failed: %s", e, exc_info=True)
+        await bot.send_message(target_chat_id, "❌ Ошибка синхронизации Telegram blacklist")
+
+
+@router.message(Command("sync_blacklist"))
+async def sync_telegram_blacklist_command_handler(
+    message: types.Message,
+    bot: Bot,
+    settings: Settings,
+    i18n_data: dict,
+    telegram_blacklist_service: TelegramBlacklistService,
+    session: AsyncSession,
+):
+    await sync_telegram_blacklist_handler(
+        message_event=message,
+        bot=bot,
+        settings=settings,
+        i18n_data=i18n_data,
+        telegram_blacklist_service=telegram_blacklist_service,
+        session=session,
+    )
 
 
 @router.message(Command("sync"))
