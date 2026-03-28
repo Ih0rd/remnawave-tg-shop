@@ -301,11 +301,11 @@ async def handle_successful_stars_payment(
                         amount=float(stars_amount),
                         currency="XTR",
                         months=months,
-                        payment_provider="stars",
+                        payment_provider="stars-upgrade",
                         username=user.username if user else None,
                     )
-                except Exception:
-                    pass
+                except Exception as e:
+                    logging.error(f"Failed to send stars squad upgrade payment notification: {e}")
         except Exception:
             await session.rollback()
         return

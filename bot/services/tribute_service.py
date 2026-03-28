@@ -445,7 +445,7 @@ class TributeService:
                 amount=amount_float,
                 currency=currency,
                 months=months,
-                payment_provider="tribute",
+                payment_provider="tribute-upgrade",
                 username=user.username if user else None,
             )
         except Exception as e:
