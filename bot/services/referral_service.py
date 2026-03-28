@@ -231,28 +231,43 @@ class ReferralService:
                                         exc_info=True)
 
             if inviter_lte_bonus_days and inviter_lte_bonus_days > 0 and self.squad_upgrade_service:
-                try:
-                    inviter_lte_expires_at = await self.squad_upgrade_service.activate_paid_upgrade(
-                        session,
-                        user_id=inviter_user_id,
-                        duration_days=inviter_lte_bonus_days,
-                        provider="referral_bonus",
-                    )
-                    if inviter_lte_expires_at:
-                        inviter_bonus_successfully_applied = True
-                        logging.info(
-                            "LTE referral bonus for inviter %s applied for %s days until %s",
-                            inviter_user_id,
-                            inviter_lte_bonus_days,
-                            inviter_lte_expires_at.isoformat(),
-                        )
-                except Exception as e_inv_lte:
-                    logging.error(
-                        "Failed to apply inviter LTE referral bonus for %s: %s",
+                if not inviter_user_model:
+                    logging.warning(
+                        "Inviter user %s not found in local DB. Cannot apply inviter LTE bonus.",
                         inviter_user_id,
-                        e_inv_lte,
-                        exc_info=True,
                     )
+                else:
+                    try:
+                        inviter_panel_uuid, _, _, _ = await self.subscription_service._get_or_create_panel_user_link_details(
+                            session, inviter_user_id, inviter_user_model
+                        )
+                        if not inviter_panel_uuid:
+                            logging.warning(
+                                "Failed to get/create panel link for inviter %s. Cannot apply inviter LTE bonus.",
+                                inviter_user_id,
+                            )
+                        else:
+                            inviter_lte_expires_at = await self.squad_upgrade_service.activate_paid_upgrade(
+                                session,
+                                user_id=inviter_user_id,
+                                duration_days=inviter_lte_bonus_days,
+                                provider="referral_bonus",
+                            )
+                            if inviter_lte_expires_at:
+                                inviter_bonus_successfully_applied = True
+                                logging.info(
+                                    "LTE referral bonus for inviter %s applied for %s days until %s",
+                                    inviter_user_id,
+                                    inviter_lte_bonus_days,
+                                    inviter_lte_expires_at.isoformat(),
+                                )
+                    except Exception as e_inv_lte:
+                        logging.error(
+                            "Failed to apply inviter LTE referral bonus for %s: %s",
+                            inviter_user_id,
+                            e_inv_lte,
+                            exc_info=True,
+                        )
 
             if referee_lte_bonus_days and referee_lte_bonus_days > 0 and self.squad_upgrade_service:
                 try:
