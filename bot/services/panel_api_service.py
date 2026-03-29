@@ -249,7 +249,15 @@ class PanelApiService:
         log_response: bool = True,
     ) -> Optional[Dict[str, Any]]:
         if uuid:
+            resolved_user = await self.resolve_user(uuid=uuid, log_response=log_response)
+            if resolved_user:
+                return resolved_user
             return await self.get_user_by_uuid(uuid, log_response=log_response)
+
+        if username:
+            resolved_user = await self.resolve_user(username=username, log_response=log_response)
+            if resolved_user:
+                return resolved_user
 
         users = await self.get_users_by_filter(
             telegram_id=telegram_id,
@@ -259,6 +267,46 @@ class PanelApiService:
         )
         if users:
             return users[0]
+        return None
+
+    async def resolve_user(
+        self,
+        *,
+        uuid: Optional[str] = None,
+        user_id: Optional[int] = None,
+        short_uuid: Optional[str] = None,
+        username: Optional[str] = None,
+        log_response: bool = True,
+    ) -> Optional[Dict[str, Any]]:
+        payload_candidates: Dict[str, Any] = {}
+        if uuid:
+            payload_candidates["uuid"] = uuid
+        if user_id is not None:
+            payload_candidates["id"] = user_id
+        if short_uuid:
+            payload_candidates["shortUuid"] = short_uuid
+        if username:
+            payload_candidates["username"] = username
+
+        if not payload_candidates:
+            return None
+
+        # API contract expects exactly one identifier.
+        preferred_key = next(iter(payload_candidates))
+        payload = {preferred_key: payload_candidates[preferred_key]}
+
+        response_data = await self._request(
+            "POST",
+            "/users/resolve",
+            json=payload,
+            log_full_response=log_response,
+        )
+
+        if response_data and not response_data.get("error") and "response" in response_data:
+            response_payload = response_data.get("response")
+            if isinstance(response_payload, dict):
+                return response_payload
+
         return None
 
     async def get_users_by_filter(
@@ -549,6 +597,13 @@ class PanelApiService:
             return response_data.get("response")
         return None
 
+    async def get_system_recap(self) -> Optional[Dict[str, Any]]:
+        """Get aggregated system recap (available in Remnawave Panel v2.7.0+)."""
+        response_data = await self._request("GET", "/system/stats/recap", log_full_response=False)
+        if response_data and not response_data.get("error") and "response" in response_data:
+            return response_data.get("response")
+        return None
+
     async def get_bandwidth_stats(self) -> Optional[Dict[str, Any]]:
         """Get bandwidth statistics"""
         response_data = await self._request("GET", "/system/stats/bandwidth", log_full_response=False)
@@ -562,6 +617,116 @@ class PanelApiService:
         if response_data and not response_data.get("error") and "response" in response_data:
             return response_data.get("response")
         return None
+
+    async def start_fetch_users_ips(self, node_uuid: str) -> Optional[str]:
+        """Start asynchronous users IP fetch for a specific node."""
+        response_data = await self._request(
+            "POST",
+            f"/ip-control/fetch-users-ips/{node_uuid}",
+            log_full_response=False,
+        )
+        if response_data and not response_data.get("error") and "response" in response_data:
+            response_payload = response_data.get("response") or {}
+            if isinstance(response_payload, dict):
+                return response_payload.get("jobId")
+        return None
+
+    async def get_fetch_users_ips_result(self, job_id: str) -> Optional[Dict[str, Any]]:
+        """Get users IP fetch result by job id."""
+        response_data = await self._request(
+            "GET",
+            f"/ip-control/fetch-users-ips/result/{job_id}",
+            log_full_response=False,
+        )
+        if response_data and not response_data.get("error") and "response" in response_data:
+            response_payload = response_data.get("response")
+            if isinstance(response_payload, dict):
+                return response_payload
+        return None
+
+    async def get_user_ip_diagnostics(
+        self,
+        *,
+        user_uuid: str,
+        max_nodes: int = 2,
+        poll_attempts: int = 4,
+        poll_delay_seconds: float = 0.7,
+    ) -> List[Dict[str, Any]]:
+        """
+        Best-effort user IP diagnostics across nodes using ip-control endpoints.
+        Returns list of dicts:
+        [{node_name, node_uuid, ips:[{ip,lastSeen}, ...]}, ...]
+        """
+        nodes_stats = await self.get_nodes_statistics()
+        if not nodes_stats:
+            return []
+
+        node_candidates: List[Dict[str, str]] = []
+        for item in nodes_stats.get("lastSevenDays", []) if isinstance(nodes_stats, dict) else []:
+            if not isinstance(item, dict):
+                continue
+            node_uuid = item.get("nodeUuid") or item.get("uuid")
+            if not node_uuid:
+                continue
+            node_name = item.get("nodeName") or item.get("name") or node_uuid
+            if not any(existing["uuid"] == node_uuid for existing in node_candidates):
+                node_candidates.append({"uuid": str(node_uuid), "name": str(node_name)})
+            if len(node_candidates) >= max_nodes:
+                break
+
+        diagnostics: List[Dict[str, Any]] = []
+        for node in node_candidates:
+            job_id = await self.start_fetch_users_ips(node["uuid"])
+            if not job_id:
+                continue
+
+            fetch_result: Optional[Dict[str, Any]] = None
+            for _ in range(max(1, poll_attempts)):
+                fetch_result = await self.get_fetch_users_ips_result(job_id)
+                if fetch_result:
+                    break
+                await asyncio.sleep(max(0.1, poll_delay_seconds))
+
+            if not fetch_result:
+                continue
+
+            users_payload = fetch_result.get("users")
+            if not isinstance(users_payload, list):
+                continue
+
+            matched_user = None
+            for user_data in users_payload:
+                if not isinstance(user_data, dict):
+                    continue
+                candidate_uuid = user_data.get("uuid") or user_data.get("userUuid")
+                if candidate_uuid == user_uuid:
+                    matched_user = user_data
+                    break
+            if not matched_user:
+                continue
+
+            normalized_ips: List[Dict[str, str]] = []
+            for ip_entry in matched_user.get("ips", []):
+                if isinstance(ip_entry, dict):
+                    ip_value = ip_entry.get("ip")
+                    if ip_value:
+                        normalized_ips.append({
+                            "ip": str(ip_value),
+                            "lastSeen": str(ip_entry.get("lastSeen", "")),
+                        })
+                elif isinstance(ip_entry, str):
+                    normalized_ips.append({"ip": ip_entry, "lastSeen": ""})
+
+            if normalized_ips:
+                diagnostics.append(
+                    {
+                        "node_name": node["name"],
+                        "node_uuid": node["uuid"],
+                        "ips": normalized_ips,
+                    }
+                )
+
+        return diagnostics
 
     async def get_top_traffic_entities(
         self,

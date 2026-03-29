@@ -115,14 +115,12 @@ def get_system_functions_keyboard(i18n_instance, lang: str) -> InlineKeyboardMar
                    callback_data="admin_action:broadcast")
     builder.button(text=_(key="admin_sync_panel_button"),
                    callback_data="admin_action:sync_panel")
-    builder.button(text=_(key="admin_sync_blacklist_button", default="🚫 Sync Telegram blacklist"),
-                   callback_data="admin_action:sync_telegram_blacklist")
     builder.button(text=_(key="admin_queue_status_button"),
                    callback_data="admin_action:queue_status")
     
     builder.button(text=_(key="back_to_admin_panel_button"),
                    callback_data="admin_action:main")
-    builder.adjust(2, 2, 1)
+    builder.adjust(2, 1, 1)
     return builder.as_markup()
 
 

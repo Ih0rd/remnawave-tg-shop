@@ -2,6 +2,7 @@ import json
 import logging
 import hmac
 import hashlib
+import math
 from aiohttp import web
 from aiogram import Bot
 from aiogram.types import InlineKeyboardMarkup
@@ -265,6 +266,89 @@ class PanelWebhookService:
                 end_date=user_payload.get("expireAt", "")[:10],
             )
 
+    async def handle_torrent_blocker_report(self, payload_data: dict):
+        """Handle `torrent_blocker.report` webhook payload and notify affected user."""
+        if not isinstance(payload_data, dict):
+            return
+
+        node_data = payload_data.get("node") or {}
+        user_data = payload_data.get("user") or {}
+        report_data = payload_data.get("report") or {}
+        action_report = report_data.get("actionReport") or {}
+
+        blocked_flag = action_report.get("blocked")
+        ip = action_report.get("ip") or "N/A"
+        block_duration = action_report.get("blockDuration")
+        will_unblock_at = action_report.get("willUnblockAt")
+        node_name = node_data.get("name") or node_data.get("nodeName") or "Node"
+        host_name = (
+            action_report.get("host")
+            or action_report.get("usedHost")
+            or action_report.get("targetHost")
+            or action_report.get("torrentHost")
+            or report_data.get("host")
+            or report_data.get("targetHost")
+            or node_data.get("host")
+            or node_data.get("address")
+            or node_name
+        )
+
+        telegram_id = user_data.get("telegramId")
+        panel_uuid = user_data.get("uuid")
+
+        async with self.async_session_factory() as session:
+            db_user = None
+            if telegram_id is not None:
+                try:
+                    db_user = await user_dal.get_user_by_id(session, int(telegram_id))
+                except (TypeError, ValueError):
+                    db_user = None
+            if not db_user and panel_uuid:
+                db_user = await user_dal.get_user_by_panel_uuid(session, str(panel_uuid))
+
+            if not db_user:
+                logging.warning(
+                    "torrent_blocker.report received but local user not found (telegramId=%s, panelUuid=%s).",
+                    telegram_id,
+                    panel_uuid,
+                )
+                return
+
+            lang = db_user.language_code or self.settings.DEFAULT_LANGUAGE
+            user_id = db_user.user_id
+
+        duration_minutes = "N/A"
+        if block_duration is not None:
+            try:
+                duration_minutes = str(max(1, math.ceil(float(block_duration) / 60.0)))
+            except (TypeError, ValueError):
+                duration_minutes = str(block_duration)
+        unblock_at_str = str(will_unblock_at)[:19] if will_unblock_at else "N/A"
+
+        if blocked_flag is True:
+            await self._send_message(
+                user_id,
+                lang,
+                "tblocker_ban_notification",
+                ip=ip,
+                block_duration_minutes=duration_minutes,
+                will_unblock_at=unblock_at_str,
+                host_name=host_name,
+            )
+        elif blocked_flag is False:
+            await self._send_message(
+                user_id,
+                lang,
+                "tblocker_unban_notification",
+                ip=ip,
+                host_name=host_name,
+            )
+        else:
+            logging.info(
+                "torrent_blocker.report ignored because blocked flag is unknown: %s",
+                blocked_flag,
+            )
+
     async def handle_webhook(self, raw_body: bytes, signature_header: Optional[str]) -> web.Response:
         if self.settings.PANEL_WEBHOOK_SECRET:
             if not signature_header:
@@ -283,6 +367,7 @@ class PanelWebhookService:
             return web.Response(status=400, text="bad_request")
 
         event_name = payload.get("name") or payload.get("event")
+        scope_name = payload.get("scope")
         user_data = payload.get("payload") or payload.get("data", {})
         if isinstance(user_data, dict) and "user" in user_data:
             user_data = user_data.get("user") or user_data
@@ -297,6 +382,11 @@ class PanelWebhookService:
             event_name,
             telegram_id if telegram_id is not None else "N/A",
         )
+
+        if event_name == "torrent_blocker.report" or scope_name == "torrent_blocker":
+            payload_data = payload.get("data") or payload.get("payload") or {}
+            await self.handle_torrent_blocker_report(payload_data)
+            return web.Response(status=200, text="ok")
 
         await self.handle_event(event_name, user_data)
         return web.Response(status=200, text="ok")

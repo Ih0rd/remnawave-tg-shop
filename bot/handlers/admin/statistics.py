@@ -61,12 +61,41 @@ async def show_statistics_handler(callback: types.CallbackQuery,
     
     try:
         async with PanelApiService(settings) as panel_service:
+            recap_stats = await panel_service.get_system_recap()
             # Get system stats
             system_stats = await panel_service.get_system_stats()
             bandwidth_stats = await panel_service.get_bandwidth_stats()
             nodes_stats = await panel_service.get_nodes_statistics()
             
-            logging.info(f"Panel stats response: system={system_stats}, bandwidth={bandwidth_stats}, nodes={nodes_stats}")
+            logging.info(
+                "Panel stats response: recap=%s, system=%s, bandwidth=%s, nodes=%s",
+                recap_stats,
+                system_stats,
+                bandwidth_stats,
+                nodes_stats,
+            )
+
+            if recap_stats:
+                panel_version = recap_stats.get("version") or recap_stats.get("panelVersion")
+                init_date = recap_stats.get("initDate") or recap_stats.get("initializedAt")
+                countries = recap_stats.get("countries")
+
+                if panel_version:
+                    stats_text_parts.append(
+                        f"🧩 {_('admin_panel_version_label', default='Версия панели')}: <b>{panel_version}</b>"
+                    )
+                if init_date:
+                    stats_text_parts.append(
+                        f"🗓 {_('admin_panel_init_date_label', default='Дата инициализации')}: <b>{str(init_date)[:10]}</b>"
+                    )
+                if isinstance(countries, list):
+                    stats_text_parts.append(
+                        f"🌍 {_('admin_panel_countries_label', default='Стран в сети')}: <b>{len(countries)}</b>"
+                    )
+                elif isinstance(countries, int):
+                    stats_text_parts.append(
+                        f"🌍 {_('admin_panel_countries_label', default='Стран в сети')}: <b>{countries}</b>"
+                    )
             
             if system_stats:
                 users = system_stats.get('users', {})
