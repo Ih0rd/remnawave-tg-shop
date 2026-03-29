@@ -255,21 +255,35 @@ async def my_subscription_command_handler(
                     get_text("subscription_tribute_notice_with_link", link=link) if link else get_text("subscription_tribute_notice")
                 )
 
+    show_device_packages_status = bool(settings.addon_device_packages)
+    show_lte_upgrade_status = settings.squad_upgrade_offer is not None
+
     has_active_device_package: Optional[bool] = None
     has_active_squad_upgrade: Optional[bool] = None
-    try:
-        active_device_packages = await user_device_package_dal.get_active_packages(session, event.from_user.id)
-        has_active_device_package = bool(active_device_packages)
-    except Exception:
-        logging.exception("Failed to load active device packages for user %s", event.from_user.id)
-    try:
-        active_squad_upgrades = await user_squad_upgrade_dal.get_active_upgrades(session, event.from_user.id)
-        has_active_squad_upgrade = bool(active_squad_upgrades)
-    except Exception:
-        logging.exception("Failed to load active squad upgrades for user %s", event.from_user.id)
+    if show_device_packages_status:
+        try:
+            active_device_packages = await user_device_package_dal.get_active_packages(session, event.from_user.id)
+            has_active_device_package = bool(active_device_packages)
+        except Exception:
+            logging.exception("Failed to load active device packages for user %s", event.from_user.id)
+    if show_lte_upgrade_status:
+        try:
+            active_squad_upgrades = await user_squad_upgrade_dal.get_active_upgrades(session, event.from_user.id)
+            has_active_squad_upgrade = bool(active_squad_upgrades)
+        except Exception:
+            logging.exception("Failed to load active squad upgrades for user %s", event.from_user.id)
+
+    if show_device_packages_status and show_lte_upgrade_status:
+        details_text_key = "my_subscription_details"
+    elif show_device_packages_status:
+        details_text_key = "my_subscription_details_without_lte"
+    elif show_lte_upgrade_status:
+        details_text_key = "my_subscription_details_without_devices"
+    else:
+        details_text_key = "my_subscription_details_basic"
 
     text = get_text(
-        "my_subscription_details",
+        details_text_key,
         end_date=end_date.strftime("%Y-%m-%d") if end_date else "N/A",
         days_left=max(0, days_left),
         status=_localized_subscription_status(active.get("status_from_panel"), get_text),
