@@ -755,11 +755,19 @@ async def handle_ip_control_view(
     )
     kb.adjust(1, 1)
 
-    await callback.message.edit_text(
-        "\n".join(text_parts),
-        reply_markup=kb.as_markup(),
-        parse_mode="HTML",
-    )
+    try:
+        await callback.message.edit_text(
+            "\n".join(text_parts),
+            reply_markup=kb.as_markup(),
+            parse_mode="HTML",
+        )
+    except TelegramBadRequest as exc:
+        if "message is not modified" not in str(exc).lower():
+            raise
+        logging.info(
+            "IP-control view for user %s was not changed; skipping message update.",
+            user.user_id,
+        )
 
 
 async def handle_refresh_user_card(callback: types.CallbackQuery, user: User,
