@@ -657,23 +657,78 @@ class PanelApiService:
         Returns list of dicts:
         [{node_name, node_uuid, ips:[{ip,lastSeen}, ...]}, ...]
         """
-        nodes_stats = await self.get_nodes_statistics()
-        if not nodes_stats:
+        def _extract_node_entries(payload: Any) -> List[Dict[str, Any]]:
+            if isinstance(payload, list):
+                return [item for item in payload if isinstance(item, dict)]
+            if not isinstance(payload, dict):
+                return []
+
+            for key in ("lastSevenDays", "nodes", "items", "data", "list"):
+                value = payload.get(key)
+                if isinstance(value, list):
+                    return [item for item in value if isinstance(item, dict)]
             return []
 
+        def _extract_users_entries(payload: Any) -> List[Dict[str, Any]]:
+            if isinstance(payload, list):
+                return [item for item in payload if isinstance(item, dict)]
+            if not isinstance(payload, dict):
+                return []
+            for key in ("users", "items", "data", "list"):
+                value = payload.get(key)
+                if isinstance(value, list):
+                    return [item for item in value if isinstance(item, dict)]
+            return []
+
+        nodes_stats = await self.get_nodes_statistics()
+        stats_entries = _extract_node_entries(nodes_stats)
+
         node_candidates: List[Dict[str, str]] = []
-        for item in nodes_stats.get("lastSevenDays", []) if isinstance(nodes_stats, dict) else []:
+        for item in stats_entries:
             if not isinstance(item, dict):
                 continue
-            node_uuid = item.get("nodeUuid") or item.get("uuid")
+            node_info = item.get("node") if isinstance(item.get("node"), dict) else item
+            node_uuid = (
+                node_info.get("nodeUuid")
+                or node_info.get("uuid")
+                or node_info.get("id")
+            )
             if not node_uuid:
                 continue
-            node_name = item.get("nodeName") or item.get("name") or node_uuid
+            node_name = (
+                node_info.get("nodeName")
+                or node_info.get("name")
+                or node_info.get("remark")
+                or node_uuid
+            )
             if not any(existing["uuid"] == node_uuid for existing in node_candidates):
                 node_candidates.append({"uuid": str(node_uuid), "name": str(node_name)})
             if len(node_candidates) >= max_nodes:
                 break
 
+        if not node_candidates:
+            for endpoint in ("/nodes", "/nodes/all"):
+                response_data = await self._request("GET", endpoint, log_full_response=False)
+                if not response_data or response_data.get("error"):
+                    continue
+                node_entries = _extract_node_entries(response_data.get("response"))
+                for item in node_entries:
+                    node_uuid = item.get("uuid") or item.get("id") or item.get("nodeUuid")
+                    if not node_uuid:
+                        continue
+                    node_name = item.get("name") or item.get("remark") or str(node_uuid)
+                    if not any(existing["uuid"] == node_uuid for existing in node_candidates):
+                        node_candidates.append({"uuid": str(node_uuid), "name": str(node_name)})
+                    if len(node_candidates) >= max_nodes:
+                        break
+                if node_candidates:
+                    break
+
+        if not node_candidates:
+            logging.warning("IP-control diagnostics: no node candidates found for user UUID %s", user_uuid)
+            return []
+
+        normalized_target_uuid = str(user_uuid).strip().lower()
         diagnostics: List[Dict[str, Any]] = []
         for node in node_candidates:
             job_id = await self.start_fetch_users_ips(node["uuid"])
@@ -690,29 +745,43 @@ class PanelApiService:
             if not fetch_result:
                 continue
 
-            users_payload = fetch_result.get("users")
-            if not isinstance(users_payload, list):
+            users_payload = _extract_users_entries(fetch_result)
+            if not users_payload:
                 continue
 
             matched_user = None
             for user_data in users_payload:
                 if not isinstance(user_data, dict):
                     continue
-                candidate_uuid = user_data.get("uuid") or user_data.get("userUuid")
-                if candidate_uuid == user_uuid:
+                candidate_uuid = (
+                    user_data.get("uuid")
+                    or user_data.get("userUuid")
+                    or user_data.get("userUUID")
+                )
+                if str(candidate_uuid).strip().lower() == normalized_target_uuid:
                     matched_user = user_data
                     break
             if not matched_user:
                 continue
 
             normalized_ips: List[Dict[str, str]] = []
-            for ip_entry in matched_user.get("ips", []):
+            raw_ips = (
+                matched_user.get("ips")
+                or matched_user.get("connectedIps")
+                or matched_user.get("connected_ips")
+                or []
+            )
+            for ip_entry in raw_ips:
                 if isinstance(ip_entry, dict):
                     ip_value = ip_entry.get("ip")
                     if ip_value:
                         normalized_ips.append({
                             "ip": str(ip_value),
-                            "lastSeen": str(ip_entry.get("lastSeen", "")),
+                            "lastSeen": str(
+                                ip_entry.get("lastSeen")
+                                or ip_entry.get("last_seen")
+                                or ""
+                            ),
                         })
                 elif isinstance(ip_entry, str):
                     normalized_ips.append({"ip": ip_entry, "lastSeen": ""})
