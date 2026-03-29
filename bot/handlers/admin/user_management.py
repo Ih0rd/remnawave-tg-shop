@@ -140,6 +140,10 @@ def get_user_card_keyboard(user_id: int, i18n_instance, lang: str,
         callback_data=f"user_action:view_logs:{user_id}"
     )
     builder.button(
+        text=_(key="admin_user_ip_control_button", default="🌐 IP-control"),
+        callback_data=f"user_action:ip_control:{user_id}"
+    )
+    builder.button(
         text=_(key="admin_user_refresh_button", default="🔄 Обновить"),
         callback_data=f"user_action:refresh:{user_id}"
     )
@@ -174,7 +178,7 @@ def get_user_card_keyboard(user_id: int, i18n_instance, lang: str,
     )
     
     quick_links_width = 2 if referrer_id else 1
-    builder.adjust(2, 2, 2, quick_links_width, 1, 2)
+    builder.adjust(2, 2, 3, quick_links_width, 1, 2)
     return builder
 
 
@@ -248,6 +252,49 @@ async def format_user_card(user: User, session: AsyncSession,
     # Panel info
     if user.panel_user_uuid:
         card_parts.append(f"{_('admin_user_panel_uuid_label', default='🔗 <b>Panel UUID:</b>')} {hcode(user.panel_user_uuid[:8] + '...' if len(user.panel_user_uuid) > 8 else user.panel_user_uuid)}")
+
+        # IP diagnostics from panel nodes (Remnawave v2.7.0+)
+        try:
+            panel_service = getattr(subscription_service, "panel_service", None)
+            if panel_service:
+                diagnostics = await panel_service.get_user_ip_diagnostics(
+                    user_uuid=user.panel_user_uuid,
+                    max_nodes=2,
+                )
+                if diagnostics:
+                    card_parts.append(
+                        f"{_('admin_user_ip_diag_title', default='🌐 <b>IP диагностика по нодам:</b>')}"
+                    )
+                    for node_item in diagnostics:
+                        node_name = node_item.get("node_name", "Node")
+                        ips = node_item.get("ips", [])
+                        if not ips:
+                            continue
+                        first_ip = ips[0]
+                        ip_value = first_ip.get("ip", "N/A")
+                        last_seen = first_ip.get("lastSeen", "")
+                        if last_seen:
+                            card_parts.append(
+                                _("admin_user_ip_diag_item_with_seen",
+                                  default="• {node}: {ip} (last seen: {last_seen})",
+                                  node=node_name,
+                                  ip=ip_value,
+                                  last_seen=last_seen)
+                            )
+                        else:
+                            card_parts.append(
+                                _("admin_user_ip_diag_item",
+                                  default="• {node}: {ip}",
+                                  node=node_name,
+                                  ip=ip_value)
+                            )
+                else:
+                    card_parts.append(
+                        _("admin_user_ip_diag_empty",
+                          default="🌐 <b>IP диагностика:</b> данных пока нет")
+                    )
+        except Exception as e_diag:
+            logging.warning("Failed to fetch IP diagnostics for user %s: %s", user.user_id, e_diag)
     
     card_parts.append("")  # Empty line
     
@@ -425,6 +472,8 @@ async def user_action_handler(callback: types.CallbackQuery, state: FSMContext,
         await handle_send_message_prompt(callback, state, user, i18n, current_lang)
     elif action == "view_logs":
         await handle_view_user_logs(callback, user, session, settings, i18n, current_lang)
+    elif action == "ip_control":
+        await handle_ip_control_view(callback, user, panel_service, i18n, current_lang)
     elif action == "refresh":
         await handle_refresh_user_card(callback, user, subscription_service, session, i18n, current_lang)
     elif action == "delete_user":
@@ -617,6 +666,100 @@ async def handle_view_user_logs(callback: types.CallbackQuery, user: User,
             "admin_user_logs_error",
             default="❌ Ошибка загрузки действий пользователя"
         ), show_alert=True)
+
+
+async def handle_ip_control_view(
+        callback: types.CallbackQuery,
+        user: User,
+        panel_service: PanelApiService,
+        i18n_instance,
+        lang: str):
+    _ = lambda key, **kwargs: i18n_instance.gettext(lang, key, **kwargs)
+
+    if not callback.message:
+        await callback.answer()
+        return
+
+    if not user.panel_user_uuid:
+        await callback.answer(
+            _("admin_user_ip_control_no_panel_uuid",
+              default="У пользователя нет panel UUID."),
+            show_alert=True,
+        )
+        return
+
+    await callback.answer()
+    text_parts = [
+        _("admin_user_ip_control_header",
+          default="🌐 <b>IP-control для пользователя {user_id}</b>",
+          user_id=user.user_id),
+        "",
+    ]
+
+    try:
+        diagnostics = await panel_service.get_user_ip_diagnostics(
+            user_uuid=user.panel_user_uuid,
+            max_nodes=5,
+            poll_attempts=5,
+        )
+        if not diagnostics:
+            text_parts.append(
+                _("admin_user_ip_control_empty",
+                  default="Данные IP-control пока не найдены.")
+            )
+        else:
+            for node_item in diagnostics:
+                node_name = node_item.get("node_name", "Node")
+                node_uuid = node_item.get("node_uuid", "")
+                text_parts.append(
+                    _("admin_user_ip_control_node_title",
+                      default="🖥 <b>{node_name}</b> ({node_uuid})",
+                      node_name=node_name,
+                      node_uuid=node_uuid[:8] + "..." if node_uuid else "n/a")
+                )
+                ips = node_item.get("ips", [])[:5]
+                for idx, ip_item in enumerate(ips, start=1):
+                    ip_value = ip_item.get("ip", "N/A")
+                    last_seen = ip_item.get("lastSeen", "")
+                    if last_seen:
+                        text_parts.append(
+                            _("admin_user_ip_control_item_seen",
+                              default="{index}. <code>{ip}</code> — {last_seen}",
+                              index=idx,
+                              ip=ip_value,
+                              last_seen=last_seen)
+                        )
+                    else:
+                        text_parts.append(
+                            _("admin_user_ip_control_item",
+                              default="{index}. <code>{ip}</code>",
+                              index=idx,
+                              ip=ip_value)
+                        )
+                text_parts.append("")
+    except Exception as e:
+        logging.error("Failed to render IP-control view for user %s: %s", user.user_id, e, exc_info=True)
+        text_parts.append(
+            _("admin_user_ip_control_error",
+              default="❌ Ошибка загрузки данных IP-control.")
+        )
+
+    kb = InlineKeyboardBuilder()
+    kb.button(
+        text=_("admin_user_ip_control_refresh_button", default="🔄 Обновить IP-control"),
+        callback_data=f"user_action:ip_control:{user.user_id}",
+    )
+    kb.button(
+        text=_("admin_user_back_to_card_button", default="🔙 К карточке"),
+        callback_data=f"user_action:refresh:{user.user_id}",
+    )
+    kb.adjust(1, 1)
+
+    await callback.message.edit_text(
+        "\n".join(text_parts),
+        reply_markup=kb.as_markup(),
+        parse_mode="HTML",
+    )
 
 
 async def handle_refresh_user_card(callback: types.CallbackQuery, user: User,

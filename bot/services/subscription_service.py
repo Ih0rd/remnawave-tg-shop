@@ -194,13 +194,9 @@ class SubscriptionService:
                     logging.warning(
                         f"Panel user '{panel_username_on_panel_standard}' already exists (errorCode A019). Fetching by username."
                     )
-                    fetched_by_username_list = (
-                        await self.panel_service.get_users_by_filter(
-                            username=panel_username_on_panel_standard
-                        )
+                    panel_user_obj_from_api = await self.panel_service.get_user(
+                        username=panel_username_on_panel_standard
                     )
-                    if fetched_by_username_list and len(fetched_by_username_list) == 1:
-                        panel_user_obj_from_api = fetched_by_username_list[0]
 
                 if not panel_user_obj_from_api:
                     logging.error(
