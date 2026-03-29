@@ -559,6 +559,6 @@
   "admin_user_ip_control_item_seen": "{index}. <code>{ip}</code> — {last_seen}",
   "admin_user_ip_control_error": "❌ Ошибка загрузки данных IP-control.",
   "admin_user_ip_control_refresh_button": "🔄 Обновить IP-control",
-  "tblocker_ban_notification": "🚫 <b>Доступ временно ограничен</b>\n\nМы зафиксировали запрещённый тип трафика через хост <b>{host_name}</b>.\nIP пользователя: <code>{ip}</code>\nДлительность блокировки: <b>{block_duration_minutes}</b> мин.\nПланируемое снятие: <b>{will_unblock_at}</b>",
-  "tblocker_unban_notification": "✅ <b>Ограничение снято</b>\n\nДоступ восстановлен.\nХост: <b>{host_name}</b>\nIP пользователя: <code>{ip}</code>"
+  "tblocker_ban_notification": "🚫 <b>Доступ временно ограничен</b>\n\nМы зафиксировали Torrent активность на сервере <b>{host_name}</b>.\nIP пользователя: <code>{ip}</code>\nДлительность блокировки: <b>{block_duration_minutes}</b> мин.\nПланируемое снятие: <b>{will_unblock_at}</b>",
+  "tblocker_unban_notification": "✅ <b>Ограничение снято</b>\n\nДоступ восстановлен.\nСервер: <b>{host_name}</b>\nIP пользователя: <code>{ip}</code>"
 }
