@@ -374,19 +374,20 @@ class PanelWebhookService:
 
         telegram_id = user_data.get("telegramId") if isinstance(user_data, dict) else None
 
-        if not event_name:
-            return web.Response(status=200, text="ok_no_event")
-
-        logging.info(
-            "Panel webhook event received: %s; telegramId=%s",
-            event_name,
-            telegram_id if telegram_id is not None else "N/A",
-        )
+        if event_name:
+            logging.info(
+                "Panel webhook event received: %s; telegramId=%s",
+                event_name,
+                telegram_id if telegram_id is not None else "N/A",
+            )
 
         if event_name == "torrent_blocker.report" or scope_name == "torrent_blocker":
             payload_data = payload.get("data") or payload.get("payload") or {}
             await self.handle_torrent_blocker_report(payload_data)
             return web.Response(status=200, text="ok")
+
+        if not event_name:
+            return web.Response(status=200, text="ok_no_event")
 
         await self.handle_event(event_name, user_data)
         return web.Response(status=200, text="ok")
