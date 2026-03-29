@@ -104,6 +104,7 @@ class ReferralService:
                 purchased_subscription_months)
             referee_lte_bonus_days = self.settings.referral_lte_bonus_referee.get(
                 purchased_subscription_months)
+            lte_upgrade_available = self.settings.squad_upgrade_offer is not None
 
             if inviter_bonus_days and inviter_bonus_days > 0:
                 if not inviter_user_model:
@@ -230,7 +231,12 @@ class ReferralService:
                                         f"Failed to create new bonus subscription for inviter {inviter_user_id}: {e_create_bonus_sub}",
                                         exc_info=True)
 
-            if inviter_lte_bonus_days and inviter_lte_bonus_days > 0 and self.squad_upgrade_service:
+            if (
+                lte_upgrade_available
+                and inviter_lte_bonus_days
+                and inviter_lte_bonus_days > 0
+                and self.squad_upgrade_service
+            ):
                 if not inviter_user_model:
                     logging.warning(
                         "Inviter user %s not found in local DB. Cannot apply inviter LTE bonus.",
@@ -269,7 +275,12 @@ class ReferralService:
                             exc_info=True,
                         )
 
-            if referee_lte_bonus_days and referee_lte_bonus_days > 0 and self.squad_upgrade_service:
+            if (
+                lte_upgrade_available
+                and referee_lte_bonus_days
+                and referee_lte_bonus_days > 0
+                and self.squad_upgrade_service
+            ):
                 try:
                     referee_lte_expires_at = await self.squad_upgrade_service.activate_paid_upgrade(
                         session,
