@@ -5,6 +5,7 @@ import re
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta, timezone
 import asyncio
+import time
 from urllib.parse import urlencode
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -823,17 +824,35 @@ class PanelApiService:
 
         normalized_target_uuid = str(user_uuid).strip().lower()
         diagnostics: List[Dict[str, Any]] = []
+        fallback_deadline = time.monotonic() + (
+            max(1, poll_attempts) * max(0.1, poll_delay_seconds)
+        )
+        scanned_nodes = 0
         for node in node_candidates:
+            if time.monotonic() >= fallback_deadline:
+                logging.info(
+                    "IP-control diagnostics fallback reached time budget for user UUID %s; "
+                    "stopping node scan after %s node(s).",
+                    user_uuid,
+                    scanned_nodes,
+                )
+                break
+            scanned_nodes += 1
             job_id = await self.start_fetch_users_ips(node["uuid"])
             if not job_id:
                 continue
 
             fetch_result: Optional[Dict[str, Any]] = None
             for _ in range(max(1, poll_attempts)):
+                if time.monotonic() >= fallback_deadline:
+                    break
                 fetch_result = await self.get_fetch_users_ips_result(job_id)
                 if fetch_result:
                     break
-                await asyncio.sleep(max(0.1, poll_delay_seconds))
+                remaining_time = fallback_deadline - time.monotonic()
+                if remaining_time <= 0:
+                    break
+                await asyncio.sleep(min(max(0.1, poll_delay_seconds), remaining_time))
 
             if not fetch_result:
                 continue
