@@ -608,9 +608,10 @@ class TributeService:
             grace_end = datetime.now(timezone.utc) + timedelta(days=grace_days)
 
             active_subscriptions = await subscription_dal.get_active_subscriptions_for_user(session, user_id)
+            tribute_subscriptions = [sub for sub in active_subscriptions if getattr(sub, "provider", None) == "tribute"]
 
             panel_users_updated: set[str] = set()
-            for sub in active_subscriptions:
+            for sub in tribute_subscriptions:
                 updated_sub = await subscription_dal.update_subscription(
                     session,
                     sub.subscription_id,
@@ -636,6 +637,12 @@ class TributeService:
                     except Exception as panel_err:
                         logging.error(
                             f"Failed to update panel expiry for user {user_id} (panel_uuid {panel_uuid}) during Tribute cancellation: {panel_err}")
+
+            if not tribute_subscriptions:
+                logging.info(
+                    "Tribute cancellation received for user %s but no active Tribute subscriptions were found.",
+                    user_id,
+                )
 
             await session.commit()
             
