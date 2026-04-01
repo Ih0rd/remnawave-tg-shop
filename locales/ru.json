@@ -164,7 +164,7 @@
   "admin_broadcast_cancelled": "Рассылка отменена.",
   "admin_broadcast_cancelled_alert": "Рассылка отменена!",
   "admin_broadcast_cancelled_nav_back": "Рассылка отменена. Вы возвращены в админ-панель.",
-  "broadcast_queue_result": "🚀 Рассылка поставлена в очередь!\n📤 В очередь добавлено: {sent_count}\n❌ Ошибок: {failed_count}\n\n📊 Статус очередей:\n👥 Очередь пользователей: {user_queue_size} сообщений\n📢 Очередь групп: {group_queue_size} сообщений\n\nℹ️ Сообщения будут отправлены автоматически с соблюдением лимитов Telegram.",
+  "broadcast_queue_result": "🚀 Рассылка поставлена в очередь!\n📤 В очередь добавлено: {sent_count}\n✅ Доставлено: {delivered_count}\n⏳ Ожидают отправки: {pending_count}\n❌ Ошибок: {failed_count}\n\n📊 Статус очередей:\n👥 Очередь пользователей: {user_queue_size} сообщений\n📢 Очередь групп: {group_queue_size} сообщений\n\nℹ️ Сообщения будут отправлены автоматически с соблюдением лимитов Telegram.",
   "admin_promo_invalid_code_format": "Код должен быть от 3 до 30 символов и содержать только буквы и цифры.",
   "admin_promo_invalid_bonus_days": "Количество бонусных дней должно быть положительным числом.",
   "admin_promo_invalid_max_activations": "Максимальное количество активаций должно быть положительным числом.",

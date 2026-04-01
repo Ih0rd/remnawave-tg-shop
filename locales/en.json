@@ -164,7 +164,7 @@
   "admin_broadcast_cancelled": "Broadcast cancelled.",
   "admin_broadcast_cancelled_alert": "Broadcast cancelled!",
   "admin_broadcast_cancelled_nav_back": "Broadcast cancelled. You are returned to the admin panel.",
-  "broadcast_queue_result": "🚀 Broadcast queued!\n📤 Enqueued: {sent_count}\n❌ Errors: {failed_count}\n\n📊 Queue Status:\n👥 User queue: {user_queue_size} messages\n📢 Group queue: {group_queue_size} messages\n\nℹ️ Messages will be sent automatically within Telegram limits.",
+  "broadcast_queue_result": "🚀 Broadcast queued!\n📤 Enqueued: {sent_count}\n✅ Delivered: {delivered_count}\n⏳ Pending: {pending_count}\n❌ Errors: {failed_count}\n\n📊 Queue Status:\n👥 User queue: {user_queue_size} messages\n📢 Group queue: {group_queue_size} messages\n\nℹ️ Messages will be sent automatically within Telegram limits.",
   "admin_promo_invalid_code_format": "Code must be 3–30 alphanumeric characters.",
   "admin_promo_invalid_bonus_days": "Bonus days must be a positive number.",
   "admin_promo_invalid_max_activations": "Max activations must be a positive number.",
