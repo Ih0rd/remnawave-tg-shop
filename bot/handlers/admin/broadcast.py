@@ -272,6 +272,7 @@ async def confirm_broadcast_callback_handler(
         if not queue_manager:
             await callback.message.edit_text("❌ Ошибка: система очередей не инициализирована", reply_markup=None)
             return
+        baseline_queue_stats = queue_manager.get_queue_stats()
 
         # Queue all messages for sending
         for uid in user_ids:
@@ -337,19 +338,28 @@ async def confirm_broadcast_callback_handler(
         # Prepare queue stats presentation
         queue_stats = queue_manager.get_queue_stats()
         back_keyboard = get_back_to_admin_panel_keyboard(current_lang, i18n)
-        initial_user_failed = queue_stats.get("user_failed_messages", 0)
-        initial_group_failed = queue_stats.get("group_failed_messages", 0)
+        initial_user_failed = baseline_queue_stats.get("user_failed_messages", 0)
+        initial_group_failed = baseline_queue_stats.get("group_failed_messages", 0)
+        initial_user_sent = baseline_queue_stats.get("user_sent_messages", 0)
+        initial_group_sent = baseline_queue_stats.get("group_sent_messages", 0)
 
         def build_queue_status(stats: dict) -> str:
+            sent_via_queue = max(
+                0, stats.get("user_sent_messages", 0) - initial_user_sent
+            ) + max(0, stats.get("group_sent_messages", 0) - initial_group_sent)
             dynamic_failed = max(
                 0, stats.get("user_failed_messages", 0) - initial_user_failed
             ) + max(0, stats.get("group_failed_messages", 0) - initial_group_failed)
             total_failed = failed_count + dynamic_failed
+            delivered_count = max(0, min(sent_count, sent_via_queue))
+            pending_count = max(0, sent_count - delivered_count - dynamic_failed)
             return _(
                 "broadcast_queue_result",
                 default=(
                     "🚀 Рассылка поставлена в очередь!\n"
                     "📤 В очередь добавлено: {sent_count}\n"
+                    "✅ Доставлено: {delivered_count}\n"
+                    "⏳ Ожидают отправки: {pending_count}\n"
                     "❌ Ошибок: {failed_count}\n\n"
                     "📊 Статус очередей:\n"
                     "👥 Очередь пользователей: {user_queue_size} сообщений\n"
@@ -357,6 +367,8 @@ async def confirm_broadcast_callback_handler(
                     "ℹ️ Сообщения будут отправлены автоматически с соблюдением лимитов Telegram."
                 ),
                 sent_count=sent_count,
+                delivered_count=delivered_count,
+                pending_count=pending_count,
                 failed_count=total_failed,
                 user_queue_size=stats["user_queue_size"],
                 group_queue_size=stats["group_queue_size"],
