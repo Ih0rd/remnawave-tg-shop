@@ -352,7 +352,7 @@ async def confirm_broadcast_callback_handler(
             ) + max(0, stats.get("group_failed_messages", 0) - initial_group_failed)
             total_failed = failed_count + dynamic_failed
             delivered_count = max(0, min(sent_count, sent_via_queue))
-            pending_count = max(0, sent_count - delivered_count)
+            pending_count = max(0, sent_count - delivered_count - dynamic_failed)
             return _(
                 "broadcast_queue_result",
                 default=(
