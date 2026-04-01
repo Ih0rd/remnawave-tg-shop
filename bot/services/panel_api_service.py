@@ -644,13 +644,39 @@ class PanelApiService:
                 return response_payload
         return None
 
+    async def start_fetch_user_ips(self, user_uuid: str) -> Optional[str]:
+        """Start asynchronous IP fetch for a specific user across all nodes."""
+        response_data = await self._request(
+            "POST",
+            f"/ip-control/fetch-ips/{user_uuid}",
+            log_full_response=False,
+        )
+        if response_data and not response_data.get("error") and "response" in response_data:
+            response_payload = response_data.get("response") or {}
+            if isinstance(response_payload, dict):
+                return response_payload.get("jobId")
+        return None
+
+    async def get_fetch_user_ips_result(self, job_id: str) -> Optional[Dict[str, Any]]:
+        """Get user IP fetch result by job id."""
+        response_data = await self._request(
+            "GET",
+            f"/ip-control/fetch-ips/result/{job_id}",
+            log_full_response=False,
+        )
+        if response_data and not response_data.get("error") and "response" in response_data:
+            response_payload = response_data.get("response")
+            if isinstance(response_payload, dict):
+                return response_payload
+        return None
+
     async def get_user_ip_diagnostics(
         self,
         *,
         user_uuid: str,
-        max_nodes: int = 2,
-        poll_attempts: int = 4,
-        poll_delay_seconds: float = 0.7,
+        max_nodes: Optional[int] = None,
+        poll_attempts: int = 20,
+        poll_delay_seconds: float = 1.0,
     ) -> List[Dict[str, Any]]:
         """
         Best-effort user IP diagnostics across nodes using ip-control endpoints.
@@ -674,11 +700,78 @@ class PanelApiService:
                 return [item for item in payload if isinstance(item, dict)]
             if not isinstance(payload, dict):
                 return []
+            if isinstance(payload.get("result"), dict):
+                result_payload = payload.get("result")
+                users = result_payload.get("users")
+                if isinstance(users, list):
+                    return [item for item in users if isinstance(item, dict)]
             for key in ("users", "items", "data", "list"):
                 value = payload.get(key)
                 if isinstance(value, list):
                     return [item for item in value if isinstance(item, dict)]
             return []
+
+        user_job_id = await self.start_fetch_user_ips(user_uuid)
+        if user_job_id:
+            for _ in range(max(1, poll_attempts)):
+                user_fetch_result = await self.get_fetch_user_ips_result(user_job_id)
+                if not user_fetch_result:
+                    await asyncio.sleep(max(0.1, poll_delay_seconds))
+                    continue
+
+                if not user_fetch_result.get("isCompleted"):
+                    await asyncio.sleep(max(0.1, poll_delay_seconds))
+                    continue
+
+                result_payload = user_fetch_result.get("result")
+                if not isinstance(result_payload, dict):
+                    break
+
+                result_nodes = result_payload.get("nodes")
+                if not isinstance(result_nodes, list):
+                    break
+
+                diagnostics: List[Dict[str, Any]] = []
+                for node_item in result_nodes:
+                    if not isinstance(node_item, dict):
+                        continue
+                    node_uuid = str(
+                        node_item.get("nodeUuid")
+                        or node_item.get("uuid")
+                        or node_item.get("id")
+                        or ""
+                    )
+                    node_name = str(
+                        node_item.get("nodeName")
+                        or node_item.get("name")
+                        or node_item.get("remark")
+                        or node_uuid
+                    )
+                    raw_ips = node_item.get("ips")
+                    if not isinstance(raw_ips, list):
+                        continue
+
+                    normalized_ips: List[Dict[str, str]] = []
+                    for ip_entry in raw_ips:
+                        if isinstance(ip_entry, dict):
+                            ip_value = ip_entry.get("ip")
+                            if ip_value:
+                                normalized_ips.append({
+                                    "ip": str(ip_value),
+                                    "lastSeen": str(ip_entry.get("lastSeen") or ip_entry.get("last_seen") or ""),
+                                })
+                        elif isinstance(ip_entry, str):
+                            normalized_ips.append({"ip": ip_entry, "lastSeen": ""})
+
+                    if normalized_ips:
+                        diagnostics.append(
+                            {
+                                "node_name": node_name,
+                                "node_uuid": node_uuid,
+                                "ips": normalized_ips,
+                            }
+                        )
+                return diagnostics
 
         nodes_stats = await self.get_nodes_statistics()
         stats_entries = _extract_node_entries(nodes_stats)
@@ -703,7 +796,7 @@ class PanelApiService:
             )
             if not any(existing["uuid"] == node_uuid for existing in node_candidates):
                 node_candidates.append({"uuid": str(node_uuid), "name": str(node_name)})
-            if len(node_candidates) >= max_nodes:
+            if max_nodes and len(node_candidates) >= max_nodes:
                 break
 
         if not node_candidates:
@@ -719,7 +812,7 @@ class PanelApiService:
                     node_name = item.get("name") or item.get("remark") or str(node_uuid)
                     if not any(existing["uuid"] == node_uuid for existing in node_candidates):
                         node_candidates.append({"uuid": str(node_uuid), "name": str(node_name)})
-                    if len(node_candidates) >= max_nodes:
+                    if max_nodes and len(node_candidates) >= max_nodes:
                         break
                 if node_candidates:
                     break
@@ -757,6 +850,7 @@ class PanelApiService:
                     user_data.get("uuid")
                     or user_data.get("userUuid")
                     or user_data.get("userUUID")
+                    or user_data.get("userId")
                 )
                 if str(candidate_uuid).strip().lower() == normalized_target_uuid:
                     matched_user = user_data

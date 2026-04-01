@@ -688,20 +688,43 @@ async def handle_ip_control_view(
         )
         return
 
-    await callback.answer()
+    await callback.answer(
+        _("admin_user_ip_control_loading_toast",
+          default="⏳ Запрашиваю IP-данные, это может занять до 20 секунд..."),
+        show_alert=False,
+    )
     text_parts = [
         _("admin_user_ip_control_header",
           default="🌐 <b>IP-control для пользователя {user_id}</b>",
           user_id=user.user_id),
         "",
+        _("admin_user_ip_control_loading",
+          default="⏳ Идёт запрос данных по всем нодам..."),
+        "",
     ]
+
+    try:
+        await callback.message.edit_text(
+            "\n".join(text_parts),
+            parse_mode="HTML",
+        )
+    except TelegramBadRequest as exc:
+        if "message is not modified" not in str(exc).lower():
+            raise
 
     try:
         diagnostics = await panel_service.get_user_ip_diagnostics(
             user_uuid=user.panel_user_uuid,
-            max_nodes=5,
-            poll_attempts=5,
+            max_nodes=None,
+            poll_attempts=20,
+            poll_delay_seconds=1.0,
         )
+        text_parts = [
+            _("admin_user_ip_control_header",
+              default="🌐 <b>IP-control для пользователя {user_id}</b>",
+              user_id=user.user_id),
+            "",
+        ]
         if not diagnostics:
             text_parts.append(
                 _("admin_user_ip_control_empty",
