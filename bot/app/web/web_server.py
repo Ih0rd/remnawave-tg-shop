@@ -33,6 +33,7 @@ async def build_and_start_web_app(
         "panel_webhook_service",
         "platega_service",
         "severpay_service",
+        "oxapay_service",
         "device_package_service",
         "squad_upgrade_service",
     ):
@@ -58,6 +59,7 @@ async def build_and_start_web_app(
     from bot.services.freekassa_service import freekassa_webhook_route
     from bot.services.platega_service import platega_webhook_route
     from bot.services.severpay_service import severpay_webhook_route
+    from bot.services.oxapay_service import oxapay_webhook_route
 
     tribute_path = settings.tribute_webhook_path
     if tribute_path.startswith("/"):
@@ -83,6 +85,11 @@ async def build_and_start_web_app(
     if sp_path.startswith("/"):
         app.router.add_post(sp_path, severpay_webhook_route)
         logging.info(f"SeverPay webhook route configured at: [POST] {sp_path}")
+
+    op_path = settings.oxapay_webhook_path
+    if op_path.startswith("/"):
+        app.router.add_post(op_path, oxapay_webhook_route)
+        logging.info(f"OxaPay webhook route configured at: [POST] {op_path}")
 
     # YooKassa webhook (register only when base URL present and path configured)
     yk_path = settings.yookassa_webhook_path

@@ -151,6 +151,11 @@ def get_payment_method_keyboard(months: int, price: float,
                 text=_("pay_with_cryptopay_button"),
                 callback_data=f"pay_crypto:{months}:{price}",
             )
+        elif method == "oxapay" and settings.OXAPAY_ENABLED:
+            builder.button(
+                text=_("pay_with_oxapay_button"),
+                callback_data=f"pay_oxapay:{months}:{price}",
+            )
     builder.button(text=_(key="cancel_button"),
                    callback_data="main_action:subscribe")
     builder.adjust(1)

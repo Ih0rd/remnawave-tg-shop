@@ -15,6 +15,7 @@ from bot.services.panel_webhook_service import PanelWebhookService
 from bot.services.freekassa_service import FreeKassaService
 from bot.services.platega_service import PlategaService
 from bot.services.severpay_service import SeverPayService
+from bot.services.oxapay_service import OxaPayService
 from bot.services.device_package_service import DevicePackageService
 from bot.services.squad_upgrade_service import SquadUpgradeService
 from bot.services.telegram_blacklist_service import TelegramBlacklistService
@@ -96,6 +97,17 @@ def build_core_services(
         squad_upgrade_service=squad_upgrade_service,
         default_return_url=bot_username_for_default_return,
     )
+    oxapay_service = OxaPayService(
+        bot=bot,
+        settings=settings,
+        i18n=i18n,
+        async_session_factory=async_session_factory,
+        subscription_service=subscription_service,
+        referral_service=referral_service,
+        device_package_service=device_package_service,
+        squad_upgrade_service=squad_upgrade_service,
+        default_return_url=bot_username_for_default_return,
+    )
     panel_webhook_service = PanelWebhookService(bot, settings, i18n, async_session_factory, panel_service)
     telegram_blacklist_service = TelegramBlacklistService(settings, panel_service)
     yookassa_service = YooKassaService(
@@ -128,6 +140,7 @@ def build_core_services(
         "yookassa_service": yookassa_service,
         "platega_service": platega_service,
         "severpay_service": severpay_service,
+        "oxapay_service": oxapay_service,
         "device_package_service": device_package_service,
         "squad_upgrade_service": squad_upgrade_service,
         "telegram_blacklist_service": telegram_blacklist_service,

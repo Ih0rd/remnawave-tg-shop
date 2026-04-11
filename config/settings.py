@@ -82,12 +82,20 @@ class Settings(BaseSettings):
         description="Lifetime of the payment link in minutes (30-4320, defaults to provider value)",
     )
 
+    OXAPAY_ENABLED: bool = Field(default=False)
+    OXAPAY_MERCHANT_API_KEY: Optional[str] = None
+    OXAPAY_BASE_URL: str = Field(default="https://api.oxapay.com/v1")
+    OXAPAY_CURRENCY: str = Field(default="RUB")
+    OXAPAY_LIFETIME_MINUTES: int = Field(default=60)
+    OXAPAY_RETURN_URL: Optional[str] = None
+    OXAPAY_SANDBOX: bool = Field(default=False)
+
     YOOKASSA_ENABLED: bool = Field(default=True)
     STARS_ENABLED: bool = Field(default=True)
     TRIBUTE_ENABLED: bool = Field(default=True)
     PAYMENT_METHODS_ORDER: Optional[str] = Field(
         default=None,
-        description="Comma-separated list of payment methods to show (e.g., severpay,freekassa,yookassa,platega,stars,cryptopay,tribute)",
+        description="Comma-separated list of payment methods to show (e.g., severpay,freekassa,yookassa,platega,oxapay,stars,cryptopay,tribute)",
     )
 
     MONTH_1_ENABLED: bool = Field(default=True, alias="1_MONTH_ENABLED")
@@ -419,6 +427,19 @@ class Settings(BaseSettings):
             return f"{base.rstrip('/')}{self.platega_webhook_path}"
         return None
 
+    @computed_field
+    @property
+    def oxapay_webhook_path(self) -> str:
+        return "/webhook/oxapay"
+
+    @computed_field
+    @property
+    def oxapay_full_webhook_url(self) -> Optional[str]:
+        base = self.WEBHOOK_BASE_URL
+        if base:
+            return f"{base.rstrip('/')}{self.oxapay_webhook_path}"
+        return None
+
     # Computed YooKassa receipt fields based on recurring toggle
     @computed_field
     @property
@@ -605,6 +626,7 @@ class Settings(BaseSettings):
             "yookassa",
             "tribute",
             "stars",
+            "oxapay",
             "cryptopay",
         ]
         if not self.PAYMENT_METHODS_ORDER:
@@ -633,6 +655,7 @@ class Settings(BaseSettings):
         'PLATEGA_RETURN_URL',
         'PLATEGA_FAILED_URL',
         'SEVERPAY_RETURN_URL',
+        'OXAPAY_RETURN_URL',
         'SQUAD_UPGRADE_TRIBUTE_LINK',
         'SQUAD_UPGRADE_TARGET_UUID',
         'SQUAD_UPGRADE_TRIBUTE_SUBSCRIPTION_NAME',
@@ -645,7 +668,7 @@ class Settings(BaseSettings):
         return v
     
     @field_validator(
-        'USER_HWID_DEVICE_LIMIT', 'SEVERPAY_MID', 'SEVERPAY_LIFETIME_MINUTES',
+        'USER_HWID_DEVICE_LIMIT', 'SEVERPAY_MID', 'SEVERPAY_LIFETIME_MINUTES', 'OXAPAY_LIFETIME_MINUTES',
         'ADDON_DEVICES_PACKAGE_1', 'ADDON_DEVICES_PACKAGE_2', 'ADDON_DEVICES_PACKAGE_3',
         'ADDON_DEVICES_RUB_PRICE_PACKAGE_1_MONTH_1', 'ADDON_DEVICES_RUB_PRICE_PACKAGE_1_MONTH_3',
         'ADDON_DEVICES_RUB_PRICE_PACKAGE_1_MONTH_6', 'ADDON_DEVICES_RUB_PRICE_PACKAGE_1_MONTH_12',

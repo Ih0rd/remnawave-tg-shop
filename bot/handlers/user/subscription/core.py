@@ -743,6 +743,11 @@ async def addon_payment_methods_menu(
                 text=get_text("pay_with_cryptopay_button"),
                 callback_data=f"pay_crypto_addon:{package_key}:{months}:{rub_price}",
             )])
+        elif method == "oxapay" and settings.OXAPAY_ENABLED and rub_price is not None:
+            rows.append([InlineKeyboardButton(
+                text=get_text("pay_with_oxapay_button"),
+                callback_data=f"pay_oxapay_addon:{package_key}:{months}:{rub_price}",
+            )])
     rows.append([InlineKeyboardButton(text=get_text("back_to_main_menu_button"), callback_data=f"addon_pkg:{package_key}")])
     await callback.message.edit_text(
         get_text("extra_devices_payment_method_title", months=months),
@@ -842,6 +847,11 @@ async def squad_upgrade_payment_methods_menu(
             rows.append([InlineKeyboardButton(
                 text=get_text("pay_with_cryptopay_button"),
                 callback_data=f"pay_crypto_upgrade:{months}:{rub_price}",
+            )])
+        elif method == "oxapay" and settings.OXAPAY_ENABLED and rub_price is not None:
+            rows.append([InlineKeyboardButton(
+                text=get_text("pay_with_oxapay_button"),
+                callback_data=f"pay_oxapay_upgrade:{months}:{rub_price}",
             )])
     rows.append([InlineKeyboardButton(text=get_text("back_to_main_menu_button"), callback_data="main_action:buy_squad_upgrade")])
     await callback.message.edit_text(
