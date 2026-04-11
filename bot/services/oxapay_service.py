@@ -75,6 +75,7 @@ class OxaPayService:
         months: int,
         amount: float,
         description: str,
+        currency: str | None = None,
     ) -> Tuple[bool, Dict[str, Any]]:
         if not self.configured:
             logging.error("OxaPayService is not configured. Cannot create invoice.")
@@ -86,7 +87,7 @@ class OxaPayService:
 
         payload: Dict[str, Any] = {
             "amount": amount_value,
-            "currency": self.currency,
+            "currency": (currency or self.currency).upper(),
             "lifetime": max(15, min(2880, self.lifetime_minutes)),
             "callback_url": self.settings.oxapay_full_webhook_url,
             "return_url": self.return_url,
@@ -190,12 +191,21 @@ class OxaPayService:
                     if (payment.provider or "").endswith("-addon") and self.device_package_service:
                         package_key = (payment.description or "").split(" ")[2] if payment.description else ""
                         activation = {"end_date": await self.device_package_service.activate_paid_package(
-                            session, payment.user_id, payment.payment_id, package_key=package_key, months=payment_months
+                            session,
+                            user_id=payment.user_id,
+                            package_key=package_key,
+                            months=payment_months,
+                            provider="oxapay-addon",
+                            payment_id=payment.payment_id,
                         )}
                         referral_bonus = None
                     elif (payment.provider or "").endswith("-upgrade") and self.squad_upgrade_service:
                         activation = {"end_date": await self.squad_upgrade_service.activate_paid_upgrade(
-                            session, payment.user_id, payment.payment_id, duration_days=payment_months * 30
+                            session,
+                            user_id=payment.user_id,
+                            duration_days=payment_months * 30,
+                            provider="oxapay-upgrade",
+                            payment_id=payment.payment_id,
                         )}
                         referral_bonus = None
                     else:

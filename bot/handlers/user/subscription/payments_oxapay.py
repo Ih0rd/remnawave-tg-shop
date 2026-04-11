@@ -29,7 +29,9 @@ async def _start_oxapay_payment(
 ):
     if not callback.message:
         return
-    currency_code = settings.OXAPAY_CURRENCY or "USD"
+    # Callback payload prices are RUB-configured in all current subscription/addon/upgrade entry points.
+    # Force RUB for both DB record and OxaPay invoice to prevent accidental currency misbilling.
+    currency_code = "RUB"
     payment_record = await payment_dal.create_payment_record(
         session,
         {
@@ -50,6 +52,7 @@ async def _start_oxapay_payment(
         months=months,
         amount=price_value,
         description=description,
+        currency=currency_code,
     )
     if not success:
         await payment_dal.update_payment_status_by_db_id(session, payment_record.payment_id, "failed_creation")
