@@ -38,6 +38,10 @@ class ReferralService:
         referee_final_end_date: Optional[datetime] = None
         referee_bonus_applied_days: Optional[int] = None
         inviter_bonus_successfully_applied = False
+        inviter_lte_bonus_successfully_applied = False
+        inviter_lte_bonus_expires_at: Optional[datetime] = None
+        inviter_notification_template_key: Optional[str] = None
+        inviter_notification_end_date: Optional[datetime] = None
 
         try:
             referee_user_model = await user_dal.get_user_by_id(
@@ -106,6 +110,24 @@ class ReferralService:
                 purchased_subscription_months)
             lte_upgrade_available = self.settings.squad_upgrade_offer is not None
 
+            def _build_lte_bonus_info(inviter_lang: str) -> str:
+                if not (lte_upgrade_available and inviter_lte_bonus_days and inviter_lte_bonus_days > 0):
+                    return ""
+
+                if inviter_lte_bonus_successfully_applied and inviter_lte_bonus_expires_at:
+                    return self.i18n.gettext(
+                        inviter_lang,
+                        "referral_bonus_inviter_notification_lte_applied",
+                        lte_days=inviter_lte_bonus_days,
+                        lte_end_date=inviter_lte_bonus_expires_at.strftime('%Y-%m-%d'),
+                    )
+
+                return self.i18n.gettext(
+                    inviter_lang,
+                    "referral_bonus_inviter_notification_lte_configured",
+                    lte_days=inviter_lte_bonus_days,
+                )
+
             if inviter_bonus_days and inviter_bonus_days > 0:
                 if not inviter_user_model:
 
@@ -135,22 +157,8 @@ class ReferralService:
                             logging.info(
                                 f"Bonus of {inviter_bonus_days} days successfully applied/extended for inviter {inviter_user_id}."
                             )
-
-                            try:
-                                inviter_lang = inviter_user_model.language_code or default_lang_for_placeholder
-                                _i = lambda k, **kw: self.i18n.gettext(
-                                    inviter_lang, k, **kw)
-                                await self.bot.send_message(
-                                    inviter_user_id,
-                                    _i("referral_bonus_inviter_notification_extended",
-                                       days=inviter_bonus_days,
-                                       referee_name=referee_name_for_msg,
-                                       new_end_date=new_end_date_inviter.
-                                       strftime('%Y-%m-%d')))
-                            except Exception as e_notify_inviter:
-                                logging.error(
-                                    f"Failed to send bonus notification to inviter {inviter_user_id}: {e_notify_inviter}"
-                                )
+                            inviter_notification_template_key = "referral_bonus_inviter_notification_extended"
+                            inviter_notification_end_date = new_end_date_inviter
                         else:
 
                             logging.info(
@@ -209,18 +217,8 @@ class ReferralService:
                                         logging.info(
                                             f"New bonus subscription for {inviter_bonus_days} days created for inviter {inviter_user_id}."
                                         )
-
-                                        inviter_lang = inviter_user_model.language_code or default_lang_for_placeholder
-                                        _i = lambda k, **kw: self.i18n.gettext(
-                                            inviter_lang, k, **kw)
-                                        await self.bot.send_message(
-                                            inviter_user_id,
-                                            _i("referral_bonus_inviter_notification_new_sub",
-                                               days=inviter_bonus_days,
-                                               referee_name=
-                                               referee_name_for_msg,
-                                               new_end_date=bonus_end_date.
-                                               strftime('%Y-%m-%d')))
+                                        inviter_notification_template_key = "referral_bonus_inviter_notification_new_sub"
+                                        inviter_notification_end_date = bonus_end_date
                                     else:
                                         logging.warning(
                                             f"Failed to update panel for new bonus subscription for inviter {inviter_user_id}. Local bonus sub created (ID: {bonus_sub.subscription_id}) but may not be active on panel."
@@ -261,6 +259,8 @@ class ReferralService:
                             )
                             if inviter_lte_expires_at:
                                 inviter_bonus_successfully_applied = True
+                                inviter_lte_bonus_successfully_applied = True
+                                inviter_lte_bonus_expires_at = inviter_lte_expires_at
                                 logging.info(
                                     "LTE referral bonus for inviter %s applied for %s days until %s",
                                     inviter_user_id,
@@ -274,6 +274,29 @@ class ReferralService:
                             e_inv_lte,
                             exc_info=True,
                         )
+
+            if (
+                inviter_user_model
+                and inviter_notification_template_key
+                and inviter_notification_end_date
+            ):
+                try:
+                    inviter_lang = inviter_user_model.language_code or default_lang_for_placeholder
+                    _i = lambda k, **kw: self.i18n.gettext(inviter_lang, k, **kw)
+                    await self.bot.send_message(
+                        inviter_user_id,
+                        _i(
+                            inviter_notification_template_key,
+                            days=inviter_bonus_days,
+                            referee_name=referee_name_for_msg,
+                            new_end_date=inviter_notification_end_date.strftime('%Y-%m-%d'),
+                            lte_bonus_info=_build_lte_bonus_info(inviter_lang),
+                        ),
+                    )
+                except Exception as e_notify_inviter:
+                    logging.error(
+                        f"Failed to send bonus notification to inviter {inviter_user_id}: {e_notify_inviter}"
+                    )
 
             if (
                 lte_upgrade_available
