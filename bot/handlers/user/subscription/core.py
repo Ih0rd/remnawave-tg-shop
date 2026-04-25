@@ -204,17 +204,28 @@ async def my_subscription_command_handler(
     await session.commit()
     if expired_count > 0:
         try:
+            device_expired_markup = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text=get_text("buy_extra_devices_button"), callback_data="main_action:buy_extra_devices")]
+                ]
+            )
             await target.answer(
                 get_text(
                     "extra_devices_expired_and_reset",
                     base_limit=_base_limit_label(settings, get_text),
-                )
+                ),
+                reply_markup=device_expired_markup,
             )
         except Exception:
             pass
     if expired_upgrades_count > 0:
         try:
-            await target.answer(get_text("squad_upgrade_expired"))
+            squad_expired_markup = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text=get_text("buy_squad_upgrade_button"), callback_data="main_action:buy_squad_upgrade")]
+                ]
+            )
+            await target.answer(get_text("squad_upgrade_expired"), reply_markup=squad_expired_markup)
         except Exception:
             pass
     active = await subscription_service.get_active_subscription_details(session, event.from_user.id)

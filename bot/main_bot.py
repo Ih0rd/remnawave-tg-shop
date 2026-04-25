@@ -211,6 +211,37 @@ async def on_startup_configured(dispatcher: Dispatcher):
         async def _addon_expiry_worker():
             while True:
                 try:
+                    notify_days_before = max(0, int(settings.SUBSCRIPTION_NOTIFY_DAYS_BEFORE))
+                    if notify_days_before > 0:
+                        for days_left in range(notify_days_before, 0, -1):
+                            if device_package_service:
+                                async with async_session_factory() as session:
+                                    user_ids = await user_device_package_dal.get_user_ids_with_packages_expiring_in_days(
+                                        session,
+                                        days_left,
+                                    )
+                                for user_id in user_ids:
+                                    async with async_session_factory() as session:
+                                        await device_package_service.process_upcoming_expiry_notifications(
+                                            session,
+                                            int(user_id),
+                                            days_left,
+                                        )
+                                        await session.commit()
+                            if squad_upgrade_service:
+                                async with async_session_factory() as session:
+                                    user_ids = await user_squad_upgrade_dal.get_user_ids_with_upgrades_expiring_in_days(
+                                        session,
+                                        days_left,
+                                    )
+                                for user_id in user_ids:
+                                    async with async_session_factory() as session:
+                                        await squad_upgrade_service.process_upcoming_expiry_notifications(
+                                            session,
+                                            int(user_id),
+                                            days_left,
+                                        )
+                                        await session.commit()
                     if device_package_service:
                         async with async_session_factory() as session:
                             user_ids = await user_device_package_dal.get_user_ids_with_expired_unhandled_packages(session)
