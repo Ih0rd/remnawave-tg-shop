@@ -250,7 +250,7 @@
   "autorenew_48h_charge_tomorrow_notice": "🔔 Reminder\n\nTomorrow an automatic charge will occur to renew your subscription. If you don't want auto-renew, disable it using the button below.",
   "autorenew_confirm_enable": "🔄 Enable auto-renew? An automatic charge will be attempted before your subscription ends.",
   "autorenew_confirm_disable": "🛑 Disable auto-renew? No further automatic charges will occur.",
-  "tribute_subscription_cancelled": "🚨 <b>Subscription Cancelled</b>\n\nYour Tribute subscription has been cancelled. You have 24 hours to restore access, after which the subscription will be blocked.\n\nTo renew your subscription, press the button below.",
+  "tribute_subscription_cancelled": "🚨 <b>Subscription Cancelled</b>\n\nYour Tribute subscription was cancelled and will not renew automatically without a new renewal webhook.\n\nTo renew your subscription, press the button below.",
   "tribute_auto_renewal": "🔄 <b>Subscription Auto-Renewed</b>\n\nYour Tribute subscription has been automatically renewed for {months} months.\nNew expiration date: {end_date}",
   "yookassa_auto_renewal": "🔄 <b>Subscription Auto-Renewed</b>\n\nYour subscription was automatically renewed for {months} month(s).\nNew expiration date: {end_date}",
   "admin_user_management_prompt": "👤 User Management\n\nEnter user ID or @username to search:",

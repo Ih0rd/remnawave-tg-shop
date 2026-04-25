@@ -598,45 +598,26 @@ class TributeService:
             logging.error(f"Failed to send tribute payment notification: {e}")
 
     async def _handle_tribute_cancellation(self, session, user_id: int, bot: Bot, i18n: JsonI18n):
-        """Handle tribute subscription cancellation - set subscription to 1 day grace period"""
-        from datetime import datetime, timezone, timedelta
+        """Handle Tribute cancellation without changing subscription end date.
+
+        Renewal is now performed only by explicit Tribute renewal webhooks.
+        """
         from db.dal import subscription_dal, user_dal
         from bot.keyboards.inline.user_keyboards import get_subscribe_only_markup
-        
-        try:
-            grace_days = 1
-            grace_end = datetime.now(timezone.utc) + timedelta(days=grace_days)
 
+        try:
             active_subscriptions = await subscription_dal.get_active_subscriptions_for_user(session, user_id)
             tribute_subscriptions = [sub for sub in active_subscriptions if getattr(sub, "provider", None) == "tribute"]
 
-            panel_users_updated: set[str] = set()
             for sub in tribute_subscriptions:
-                updated_sub = await subscription_dal.update_subscription(
+                await subscription_dal.update_subscription(
                     session,
                     sub.subscription_id,
                     {
-                        "end_date": grace_end,
                         "status_from_panel": "CANCELLED",
                         "skip_notifications": True,
                     },
                 )
-
-                panel_uuid = updated_sub.panel_user_uuid if updated_sub else None
-                if panel_uuid and panel_uuid not in panel_users_updated:
-                    panel_users_updated.add(panel_uuid)
-                    panel_payload = {
-                        "expireAt": grace_end.isoformat(timespec="milliseconds").replace("+00:00", "Z"),
-                    }
-                    try:
-                        await self.panel_service.update_user_details_on_panel(
-                            panel_uuid,
-                            panel_payload,
-                            log_response=False,
-                        )
-                    except Exception as panel_err:
-                        logging.error(
-                            f"Failed to update panel expiry for user {user_id} (panel_uuid {panel_uuid}) during Tribute cancellation: {panel_err}")
 
             if not tribute_subscriptions:
                 logging.info(
@@ -645,7 +626,7 @@ class TributeService:
                 )
 
             await session.commit()
-            
+
             # Send notification about cancellation if enabled
             if not self.settings.TRIBUTE_SKIP_CANCELLATION_NOTIFICATIONS:
                 db_user = await user_dal.get_user_by_id(session, user_id)
@@ -658,8 +639,7 @@ class TributeService:
                 cancellation_msg = _(
                     "tribute_subscription_cancelled",
                     default="🚨 <b>Подписка отменена</b>\n\n"
-                           "Ваша подписка Tribute была отменена. У вас есть 24 часа для восстановления доступа, "
-                           "после чего подписка будет заблокирована.\n\n"
+                           "Ваша подписка Tribute была отменена и не будет продлеваться автоматически без нового webhook о продлении.\n\n"
                            "Для продления подписки нажмите кнопку ниже.",
                     user_name=first_name
                 )
@@ -674,7 +654,7 @@ class TributeService:
                 except Exception as e:
                     logging.error(f"Failed to send tribute cancellation notification to user {user_id}: {e}")
                     
-            logging.info(f"Tribute subscription cancelled for user {user_id}, grace period set to 1 day")
+            logging.info(f"Tribute subscription cancelled for user {user_id} (end date unchanged)")
             
         except Exception as e:
             logging.error(f"Error handling tribute cancellation for user {user_id}: {e}")
