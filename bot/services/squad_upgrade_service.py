@@ -7,7 +7,7 @@ import json
 import logging
 
 from aiogram import Bot
-from aiogram.types import LabeledPrice
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, LabeledPrice
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.settings import Settings
@@ -133,10 +133,85 @@ class SquadUpgradeService:
         else:
             text = "Your squad upgrade has expired."
         try:
-            await self.bot.send_message(user_id, text)
+            button_text = "🚀 Продлить LTE апгрейд"
+            if self.i18n:
+                try:
+                    button_text = self.i18n.gettext(lang, "buy_squad_upgrade_button")
+                except Exception:
+                    pass
+            renewal_markup = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text=button_text, callback_data="main_action:buy_squad_upgrade")]
+                ]
+            )
+            await self.bot.send_message(user_id, text, reply_markup=renewal_markup)
         except Exception as e:
             logging.error(f"Failed to send squad upgrade expiry notification to user {user_id}: {e}")
         return expired_count
+
+    async def process_upcoming_expiry_notifications(
+        self,
+        session: AsyncSession,
+        user_id: int,
+        days_left: int,
+    ) -> int:
+        if days_left <= 0:
+            return 0
+        active_upgrades = await user_squad_upgrade_dal.get_active_upgrades(session, user_id)
+        if not active_upgrades:
+            return 0
+
+        now = datetime.now(timezone.utc)
+        day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        matching_upgrades = [
+            upgrade
+            for upgrade in active_upgrades
+            if (now + timedelta(days=days_left - 1)) < upgrade.expires_at <= (now + timedelta(days=days_left))
+            and (not upgrade.expiry_notified_at or upgrade.expiry_notified_at < day_start)
+        ]
+        if not matching_upgrades:
+            return 0
+
+        db_user = await user_dal.get_user_by_id(session, user_id)
+        lang = self.settings.DEFAULT_LANGUAGE
+        if db_user and db_user.language_code:
+            lang = db_user.language_code
+        nearest_expiry = min(upgrade.expires_at for upgrade in matching_upgrades)
+
+        if self.i18n:
+            try:
+                text = self.i18n.gettext(
+                    lang,
+                    "squad_upgrade_expiring_soon",
+                    days_left=days_left,
+                    end_date=nearest_expiry.strftime("%Y-%m-%d"),
+                )
+            except Exception:
+                text = f"Your LTE subscription upgrade expires in {days_left} day(s)."
+        else:
+            text = f"Your LTE subscription upgrade expires in {days_left} day(s)."
+
+        try:
+            button_text = "🚀 Продлить LTE апгрейд"
+            if self.i18n:
+                try:
+                    button_text = self.i18n.gettext(lang, "buy_squad_upgrade_button")
+                except Exception:
+                    pass
+            renewal_markup = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text=button_text, callback_data="main_action:buy_squad_upgrade")]
+                ]
+            )
+            await self.bot.send_message(user_id, text, reply_markup=renewal_markup)
+        except Exception as e:
+            logging.error(f"Failed to send squad upgrade upcoming expiry notification to user {user_id}: {e}")
+            return 0
+
+        for upgrade in matching_upgrades:
+            upgrade.expiry_notified_at = now
+        await session.flush()
+        return len(matching_upgrades)
 
     async def create_stars_invoice(
         self,

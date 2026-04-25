@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from calendar import monthrange
 from typing import Optional, Dict, Any
 import logging
 
 from aiogram import Bot
-from aiogram.types import LabeledPrice
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, LabeledPrice
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.settings import Settings
@@ -87,10 +87,84 @@ class DevicePackageService:
         else:
             text = "Your additional devices package has expired."
         try:
-            await self.bot.send_message(user_id, text)
+            button_text = "📱 Продлить пакет устройств"
+            if self.i18n:
+                try:
+                    button_text = self.i18n.gettext(lang, "buy_extra_devices_button")
+                except Exception:
+                    pass
+            renewal_markup = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text=button_text, callback_data="main_action:buy_extra_devices")]
+                ]
+            )
+            await self.bot.send_message(user_id, text, reply_markup=renewal_markup)
         except Exception as e:
             logging.error(f"Failed to send addon package expiry notification to user {user_id}: {e}")
         return expired_count
+
+    async def process_upcoming_expiry_notifications(
+        self,
+        session: AsyncSession,
+        user_id: int,
+        days_left: int,
+    ) -> int:
+        if days_left <= 0:
+            return 0
+        active_packages = await user_device_package_dal.get_active_packages(session, user_id)
+        if not active_packages:
+            return 0
+        now = datetime.now(timezone.utc)
+        day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        matching_packages = [
+            package
+            for package in active_packages
+            if (now + timedelta(days=days_left - 1)) < package.expires_at <= (now + timedelta(days=days_left))
+            and (not package.expiry_notified_at or package.expiry_notified_at < day_start)
+        ]
+        if not matching_packages:
+            return 0
+
+        db_user = await user_dal.get_user_by_id(session, user_id)
+        lang = self.settings.DEFAULT_LANGUAGE
+        if db_user and db_user.language_code:
+            lang = db_user.language_code
+
+        nearest_expiry = min(pkg.expires_at for pkg in matching_packages)
+        if self.i18n:
+            try:
+                text = self.i18n.gettext(
+                    lang,
+                    "extra_devices_expiring_soon",
+                    days_left=days_left,
+                    end_date=nearest_expiry.strftime("%Y-%m-%d"),
+                )
+            except Exception:
+                text = f"Your additional devices package expires in {days_left} day(s)."
+        else:
+            text = f"Your additional devices package expires in {days_left} day(s)."
+
+        try:
+            button_text = "📱 Продлить пакет устройств"
+            if self.i18n:
+                try:
+                    button_text = self.i18n.gettext(lang, "buy_extra_devices_button")
+                except Exception:
+                    pass
+            renewal_markup = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text=button_text, callback_data="main_action:buy_extra_devices")]
+                ]
+            )
+            await self.bot.send_message(user_id, text, reply_markup=renewal_markup)
+        except Exception as e:
+            logging.error(f"Failed to send addon package upcoming expiry notification to user {user_id}: {e}")
+            return 0
+
+        for package in matching_packages:
+            package.expiry_notified_at = now
+        await session.flush()
+        return len(matching_packages)
 
     async def _apply_limit_to_panel(self, session: AsyncSession, user_id: int) -> bool:
         db_user = await user_dal.get_user_by_id(session, user_id)

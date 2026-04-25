@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import List
 
 from sqlalchemy import select
@@ -71,6 +71,30 @@ async def get_user_ids_with_expired_unhandled_packages(session: AsyncSession) ->
         .where(
             UserDevicePackage.is_active.is_(True),
             UserDevicePackage.expires_at <= now,
+        )
+        .distinct()
+    )
+    result = await session.execute(stmt)
+    return [int(row[0]) for row in result.all() if row and row[0] is not None]
+
+
+async def get_user_ids_with_packages_expiring_in_days(session: AsyncSession, days_left: int) -> List[int]:
+    if days_left <= 0:
+        return []
+    now = datetime.now(timezone.utc)
+    day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    window_start = now + timedelta(days=days_left - 1)
+    window_end = now + timedelta(days=days_left)
+    stmt = (
+        select(UserDevicePackage.user_id)
+        .where(
+            UserDevicePackage.is_active.is_(True),
+            UserDevicePackage.expires_at > window_start,
+            UserDevicePackage.expires_at <= window_end,
+            (
+                UserDevicePackage.expiry_notified_at.is_(None)
+                | (UserDevicePackage.expiry_notified_at < day_start)
+            ),
         )
         .distinct()
     )

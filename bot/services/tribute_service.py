@@ -179,7 +179,16 @@ class TributeService:
                         referral_service=referral_service,
                     )
             elif event_name == "cancelled_subscription":
-                await self._handle_tribute_cancellation(session, int(user_id), bot, i18n)
+                payment_target = self._resolve_payment_target(data)
+                if payment_target == "subscription":
+                    await self._handle_tribute_cancellation(session, int(user_id), bot, i18n)
+                else:
+                    logging.info(
+                        "Ignored Tribute cancelled_subscription for non-base target '%s' (user_id=%s).",
+                        payment_target,
+                        user_id,
+                    )
+                    await session.commit()
                 
             else:
                 await session.commit()
@@ -295,6 +304,13 @@ class TributeService:
                 if target in {"squad_upgrade", "upgrade"}:
                     return True
         return False
+
+    def _resolve_payment_target(self, data: dict) -> str:
+        if self._extract_addon_package_key(data):
+            return "addon"
+        if self._is_squad_upgrade_payment(data):
+            return "squad_upgrade"
+        return "subscription"
 
     async def _handle_tribute_paid_addon_event(
         self,
@@ -619,7 +635,9 @@ class TributeService:
                     },
                 )
 
-            if not tribute_subscriptions:
+            had_active_tribute_subscriptions = bool(tribute_subscriptions)
+
+            if not had_active_tribute_subscriptions:
                 logging.info(
                     "Tribute cancellation received for user %s but no active Tribute subscriptions were found.",
                     user_id,
@@ -627,8 +645,8 @@ class TributeService:
 
             await session.commit()
 
-            # Send notification about cancellation if enabled
-            if not self.settings.TRIBUTE_SKIP_CANCELLATION_NOTIFICATIONS:
+            # Send notification only when we really cancelled at least one active Tribute base subscription.
+            if had_active_tribute_subscriptions and not self.settings.TRIBUTE_SKIP_CANCELLATION_NOTIFICATIONS:
                 db_user = await user_dal.get_user_by_id(session, user_id)
                 lang = db_user.language_code if db_user and db_user.language_code else self.settings.DEFAULT_LANGUAGE
                 first_name = db_user.first_name or f"User {user_id}" if db_user else f"User {user_id}"
