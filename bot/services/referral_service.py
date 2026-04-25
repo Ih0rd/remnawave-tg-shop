@@ -38,6 +38,8 @@ class ReferralService:
         referee_final_end_date: Optional[datetime] = None
         referee_bonus_applied_days: Optional[int] = None
         inviter_bonus_successfully_applied = False
+        inviter_lte_bonus_successfully_applied = False
+        inviter_lte_bonus_expires_at: Optional[datetime] = None
 
         try:
             referee_user_model = await user_dal.get_user_by_id(
@@ -106,6 +108,24 @@ class ReferralService:
                 purchased_subscription_months)
             lte_upgrade_available = self.settings.squad_upgrade_offer is not None
 
+            def _build_lte_bonus_info(inviter_lang: str) -> str:
+                if not (lte_upgrade_available and inviter_lte_bonus_days and inviter_lte_bonus_days > 0):
+                    return ""
+
+                if inviter_lte_bonus_successfully_applied and inviter_lte_bonus_expires_at:
+                    return self.i18n.gettext(
+                        inviter_lang,
+                        "referral_bonus_inviter_notification_lte_applied",
+                        lte_days=inviter_lte_bonus_days,
+                        lte_end_date=inviter_lte_bonus_expires_at.strftime('%Y-%m-%d'),
+                    )
+
+                return self.i18n.gettext(
+                    inviter_lang,
+                    "referral_bonus_inviter_notification_lte_configured",
+                    lte_days=inviter_lte_bonus_days,
+                )
+
             if inviter_bonus_days and inviter_bonus_days > 0:
                 if not inviter_user_model:
 
@@ -146,7 +166,8 @@ class ReferralService:
                                        days=inviter_bonus_days,
                                        referee_name=referee_name_for_msg,
                                        new_end_date=new_end_date_inviter.
-                                       strftime('%Y-%m-%d')))
+                                       strftime('%Y-%m-%d'),
+                                       lte_bonus_info=_build_lte_bonus_info(inviter_lang)))
                             except Exception as e_notify_inviter:
                                 logging.error(
                                     f"Failed to send bonus notification to inviter {inviter_user_id}: {e_notify_inviter}"
@@ -220,7 +241,8 @@ class ReferralService:
                                                referee_name=
                                                referee_name_for_msg,
                                                new_end_date=bonus_end_date.
-                                               strftime('%Y-%m-%d')))
+                                               strftime('%Y-%m-%d'),
+                                               lte_bonus_info=_build_lte_bonus_info(inviter_lang)))
                                     else:
                                         logging.warning(
                                             f"Failed to update panel for new bonus subscription for inviter {inviter_user_id}. Local bonus sub created (ID: {bonus_sub.subscription_id}) but may not be active on panel."
@@ -261,6 +283,8 @@ class ReferralService:
                             )
                             if inviter_lte_expires_at:
                                 inviter_bonus_successfully_applied = True
+                                inviter_lte_bonus_successfully_applied = True
+                                inviter_lte_bonus_expires_at = inviter_lte_expires_at
                                 logging.info(
                                     "LTE referral bonus for inviter %s applied for %s days until %s",
                                     inviter_user_id,
