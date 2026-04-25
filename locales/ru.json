@@ -511,7 +511,7 @@
   "extra_devices_invoice_title": "Доп. устройства на {months} мес.",
   "extra_devices_purchase_success": "✅ Пакет дополнительных устройств активирован до {end_date}. Приятного пользования!",
   "extra_devices_expiring_soon": "⏳ Пакет дополнительных устройств закончится через {days_left} дн. (до {end_date}). Для продления нажмите кнопку ниже.",
-  "extra_devices_expired_and_reset": "Срок действия пакета дополнительных устройств закончился. Лимит устройств возвращен к базовому значению: {base_limit}. Для продления нажмите кнопку ниже.",
+  "extra_devices_expired_and_reset": "⏳ Срок действия пакета дополнительных устройств закончился. Лимит устройств возвращен к базовому значению: {base_limit}. Для продления нажмите кнопку ниже.",
   "promo_code_applied_success_package": "✅ Промокод успешно применен!\nАктивирован пакет устройств №{package_key}.\nДействует до: {expires_at}.",
   "admin_promo_type_bonus_days": "🎁 Бонусные дни",
   "admin_promo_type_device_package": "📦 Пакет устройств",
