@@ -16,6 +16,7 @@ from bot.keyboards.inline.user_keyboards import (
 )
 from datetime import datetime
 from bot.middlewares.i18n import JsonI18n
+from bot.utils.menu_banners import send_menu_with_optional_banner
 
 from .start import send_main_menu
 
@@ -46,17 +47,28 @@ async def prompt_promo_code_input(callback: types.CallbackQuery,
                               show_alert=True)
         return
 
+    reply_markup = get_back_to_main_menu_markup(current_lang, i18n)
     try:
-        await callback.message.edit_text(
+        await send_menu_with_optional_banner(
+            target_message_obj=callback.message,
+            settings=settings,
+            menu_key="promo_code",
             text=_(key="promo_code_prompt"),
-            reply_markup=get_back_to_main_menu_markup(current_lang, i18n))
+            reply_markup=reply_markup,
+            is_edit=True,
+        )
     except Exception as e_edit:
         logging.warning(
             f"Failed to edit message for promo prompt: {e_edit}. Sending new one."
         )
-        await callback.message.answer(
+        await send_menu_with_optional_banner(
+            target_message_obj=callback.message,
+            settings=settings,
+            menu_key="promo_code",
             text=_(key="promo_code_prompt"),
-            reply_markup=get_back_to_main_menu_markup(current_lang, i18n))
+            reply_markup=reply_markup,
+            is_edit=False,
+        )
 
     await callback.answer()
     await state.set_state(UserPromoStates.waiting_for_promo_code)
