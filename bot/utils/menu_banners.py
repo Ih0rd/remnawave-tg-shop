@@ -35,9 +35,13 @@ async def send_menu_with_optional_banner(
     banner_path = find_banner_path(settings, menu_key)
     if not banner_path or len(text) > _MAX_TELEGRAM_CAPTION_LENGTH:
         if is_edit:
-            await target_message_obj.edit_text(text, reply_markup=reply_markup)
-        else:
-            await target_message_obj.answer(text, reply_markup=reply_markup)
+            try:
+                await target_message_obj.edit_text(text, reply_markup=reply_markup)
+                return
+            except Exception:
+                await target_message_obj.answer(text, reply_markup=reply_markup)
+                return
+        await target_message_obj.answer(text, reply_markup=reply_markup)
         return
 
     if is_edit:
@@ -52,8 +56,23 @@ async def send_menu_with_optional_banner(
                 await target_message_obj.edit_caption(caption=text, reply_markup=reply_markup)
                 return
             except Exception:
-                await target_message_obj.edit_text(text, reply_markup=reply_markup)
-                return
+                try:
+                    await target_message_obj.edit_text(text, reply_markup=reply_markup)
+                    return
+                except Exception:
+                    pass
+
+        try:
+            await target_message_obj.answer_photo(
+                photo=FSInputFile(str(banner_path)),
+                caption=text,
+                reply_markup=reply_markup,
+            )
+            return
+        except Exception:
+            await target_message_obj.answer(text, reply_markup=reply_markup)
+            return
+
 
     try:
         await target_message_obj.answer_photo(
