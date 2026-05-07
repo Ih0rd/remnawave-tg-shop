@@ -151,6 +151,7 @@ def build_core_services(
         "panel_webhook_service": panel_webhook_service,
         "yookassa_service": yookassa_service,
         "platega_service": platega_service,
+        "rollypay_service": rollypay_service,
         "severpay_service": severpay_service,
         "oxapay_service": oxapay_service,
         "device_package_service": device_package_service,
