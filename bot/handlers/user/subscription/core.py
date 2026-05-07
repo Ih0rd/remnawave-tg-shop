@@ -17,6 +17,7 @@ from bot.services.subscription_service import SubscriptionService
 from bot.services.panel_api_service import PanelApiService
 from bot.services.device_package_service import DevicePackageService
 from bot.services.squad_upgrade_service import SquadUpgradeService
+from bot.utils.menu_banners import send_menu_with_optional_banner
 from bot.middlewares.i18n import JsonI18n
 from db.dal import subscription_dal, user_billing_dal, user_device_package_dal, user_squad_upgrade_dal
 from db.models import Subscription
@@ -158,15 +159,36 @@ async def display_subscription_options(event: Union[types.Message, types.Callbac
 
     if isinstance(event, types.CallbackQuery):
         try:
-            await target_message_obj.edit_text(text_content, reply_markup=reply_markup)
+            await send_menu_with_optional_banner(
+                target_message_obj=target_message_obj,
+                settings=settings,
+                menu_key="subscription_options",
+                text=text_content,
+                reply_markup=reply_markup,
+                is_edit=True,
+            )
         except Exception:
-            await target_message_obj.answer(text_content, reply_markup=reply_markup)
+            await send_menu_with_optional_banner(
+                target_message_obj=target_message_obj,
+                settings=settings,
+                menu_key="subscription_options",
+                text=text_content,
+                reply_markup=reply_markup,
+                is_edit=False,
+            )
         try:
             await event.answer()
         except Exception:
             pass
     else:
-        await target_message_obj.answer(text_content, reply_markup=reply_markup)
+        await send_menu_with_optional_banner(
+            target_message_obj=target_message_obj,
+            settings=settings,
+            menu_key="subscription_options",
+            text=text_content,
+            reply_markup=reply_markup,
+            is_edit=False,
+        )
 
 
 @router.callback_query(F.data == "main_action:subscribe")
@@ -246,11 +268,11 @@ async def my_subscription_command_handler(
             except Exception:
                 pass
             try:
-                await event.message.edit_text(text, reply_markup=kb)
+                await send_menu_with_optional_banner(event.message, settings, "subscription_options", text, kb, is_edit=True)
             except Exception:
-                await event.message.answer(text, reply_markup=kb)
+                await send_menu_with_optional_banner(event.message, settings, "subscription_options", text, kb, is_edit=False)
         else:
-            await event.answer(text, reply_markup=kb)
+            await send_menu_with_optional_banner(event, settings, "subscription_options", text, kb, is_edit=False)
         return
 
     end_date = active.get("end_date")
@@ -427,7 +449,7 @@ async def my_subscription_command_handler(
         except Exception:
             pass
         try:
-            await event.message.edit_text(text + tribute_hint, reply_markup=markup, parse_mode="HTML", disable_web_page_preview=True)
+            await send_menu_with_optional_banner(event.message, settings, "my_subscription", text + tribute_hint, markup, is_edit=True)
         except Exception:
             await bot.send_message(
                 chat_id=target.chat.id,
@@ -437,7 +459,7 @@ async def my_subscription_command_handler(
                 disable_web_page_preview=True,
             )
     else:
-        await target.answer(text + tribute_hint, reply_markup=markup, parse_mode="HTML", disable_web_page_preview=True)
+        await send_menu_with_optional_banner(target, settings, "my_subscription", text + tribute_hint, markup, is_edit=False)
 
 
 @router.callback_query(F.data == "main_action:my_devices")
@@ -608,11 +630,11 @@ async def my_devices_command_handler(
         except Exception:
             pass
         try:
-            await event.message.edit_text(text, reply_markup=markup)
+            await send_menu_with_optional_banner(event.message, settings, "my_devices", text, markup, is_edit=True)
         except Exception:
-            await event.message.answer(text, reply_markup=markup)
+            await send_menu_with_optional_banner(event.message, settings, "my_devices", text, markup, is_edit=False)
     else:
-        await target.answer(text, reply_markup=markup)
+        await send_menu_with_optional_banner(target, settings, "my_devices", text, markup, is_edit=False)
 
 
 @router.callback_query(F.data == "main_action:buy_extra_devices")
@@ -647,9 +669,13 @@ async def buy_extra_devices_menu(
             callback_data=f"addon_pkg:{package_key}",
         )])
     rows.append([InlineKeyboardButton(text=get_text("back_to_main_menu_button"), callback_data="main_action:my_subscription")])
-    await callback.message.edit_text(
+    await send_menu_with_optional_banner(
+        callback.message,
+        settings,
+        "buy_extra_devices",
         get_text("extra_devices_packages_title"),
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+        InlineKeyboardMarkup(inline_keyboard=rows),
+        is_edit=True,
     )
     await callback.answer()
 
@@ -687,9 +713,13 @@ async def addon_package_periods_menu(
             callback_data=f"addon_period:{package_key}:{months}",
         )])
     rows.append([InlineKeyboardButton(text=get_text("back_to_main_menu_button"), callback_data="main_action:buy_extra_devices")])
-    await callback.message.edit_text(
+    await send_menu_with_optional_banner(
+        callback.message,
+        settings,
+        "buy_extra_devices",
         get_text("extra_devices_periods_title", devices=package["added_devices"]),
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+        InlineKeyboardMarkup(inline_keyboard=rows),
+        is_edit=True,
     )
     await callback.answer()
 
@@ -765,9 +795,13 @@ async def addon_payment_methods_menu(
                 callback_data=f"pay_oxapay_addon:{package_key}:{months}:{rub_price}",
             )])
     rows.append([InlineKeyboardButton(text=get_text("back_to_main_menu_button"), callback_data=f"addon_pkg:{package_key}")])
-    await callback.message.edit_text(
+    await send_menu_with_optional_banner(
+        callback.message,
+        settings,
+        "buy_extra_devices",
         get_text("extra_devices_payment_method_title", months=months),
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+        InlineKeyboardMarkup(inline_keyboard=rows),
+        is_edit=True,
     )
     await callback.answer()
 
@@ -803,9 +837,13 @@ async def buy_squad_upgrade_menu(
             callback_data=f"squad_upgrade_period:{months}",
         )])
     rows.append([InlineKeyboardButton(text=get_text("back_to_main_menu_button"), callback_data="main_action:my_subscription")])
-    await callback.message.edit_text(
+    await send_menu_with_optional_banner(
+        callback.message,
+        settings,
+        "buy_squad_upgrade",
         get_text("squad_upgrade_periods_title"),
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+        InlineKeyboardMarkup(inline_keyboard=rows),
+        is_edit=True,
     )
     await callback.answer()
 
@@ -875,9 +913,13 @@ async def squad_upgrade_payment_methods_menu(
                 callback_data=f"pay_oxapay_upgrade:{months}:{rub_price}",
             )])
     rows.append([InlineKeyboardButton(text=get_text("back_to_main_menu_button"), callback_data="main_action:buy_squad_upgrade")])
-    await callback.message.edit_text(
+    await send_menu_with_optional_banner(
+        callback.message,
+        settings,
+        "buy_squad_upgrade",
         get_text("squad_upgrade_payment_method_title", months=months),
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+        InlineKeyboardMarkup(inline_keyboard=rows),
+        is_edit=True,
     )
     await callback.answer()
 

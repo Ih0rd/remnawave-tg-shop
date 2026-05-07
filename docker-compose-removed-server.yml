@@ -11,8 +11,10 @@ services:
       - remnawave-network
     environment:
       - TZ=UTC
+      - BANNERS_DIR=/app/banners
     volumes:
       - ./locales:/app/locales
+      - ./banners:/app/banners:ro
     restart: unless-stopped
     depends_on:
       - remnawave-tg-shop-db

@@ -212,6 +212,8 @@ class Settings(BaseSettings):
     START_COMMAND_DESCRIPTION: Optional[str] = Field(default=None)
     DISABLE_WELCOME_MESSAGE: bool = Field(default=False, description="Disable welcome message on /start command")
 
+    BANNERS_DIR: str = Field(default="/app/banners", description="Directory with optional menu banners (supports jpg/jpeg/png/gif/webp)")
+
     MY_DEVICES_SECTION_ENABLED: bool = Field(
         default=False,
         description="Enable the My Devices section in the subscription menu"

@@ -9,6 +9,7 @@ from bot.services.referral_service import ReferralService
 
 from bot.keyboards.inline.user_keyboards import get_back_to_main_menu_markup
 from bot.middlewares.i18n import JsonI18n
+from bot.utils.menu_banners import send_menu_with_optional_banner
 
 router = Router(name="user_referral_router")
 
@@ -122,21 +123,36 @@ async def referral_command_handler(event: Union[types.Message,
     reply_markup_val = get_referral_link_keyboard(current_lang, i18n)
 
     if isinstance(event, types.Message):
-        await event.answer(text,
-                           reply_markup=reply_markup_val,
-                           disable_web_page_preview=True)
+        await send_menu_with_optional_banner(
+            target_message_obj=event,
+            settings=settings,
+            menu_key="referral",
+            text=text,
+            reply_markup=reply_markup_val,
+            is_edit=False,
+        )
     elif isinstance(event, types.CallbackQuery) and event.message:
         try:
-            await event.message.edit_text(text,
-                                          reply_markup=reply_markup_val,
-                                          disable_web_page_preview=True)
+            await send_menu_with_optional_banner(
+                target_message_obj=event.message,
+                settings=settings,
+                menu_key="referral",
+                text=text,
+                reply_markup=reply_markup_val,
+                is_edit=True,
+            )
         except Exception as e_edit:
             logging.warning(
                 f"Failed to edit message for referral info: {e_edit}. Sending new one."
             )
-            await event.message.answer(text,
-                                       reply_markup=reply_markup_val,
-                                       disable_web_page_preview=True)
+            await send_menu_with_optional_banner(
+                target_message_obj=event.message,
+                settings=settings,
+                menu_key="referral",
+                text=text,
+                reply_markup=reply_markup_val,
+                is_edit=False,
+            )
         await event.answer()
 
 

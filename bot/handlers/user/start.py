@@ -26,6 +26,7 @@ from bot.services.squad_upgrade_service import SquadUpgradeService
 from config.settings import Settings
 from bot.middlewares.i18n import JsonI18n
 from bot.utils.text_sanitizer import sanitize_username, sanitize_display_name
+from bot.utils.menu_banners import send_menu_with_optional_banner
 
 router = Router(name="user_start_router")
 
@@ -96,10 +97,14 @@ async def send_main_menu(target_event: Union[types.Message,
         return
 
     try:
-        if is_edit:
-            await target_message_obj.edit_text(text, reply_markup=reply_markup)
-        else:
-            await target_message_obj.answer(text, reply_markup=reply_markup)
+        await send_menu_with_optional_banner(
+            target_message_obj=target_message_obj,
+            settings=settings,
+            menu_key="main_menu",
+            text=text,
+            reply_markup=reply_markup,
+            is_edit=is_edit,
+        )
 
         if isinstance(target_event, types.CallbackQuery):
             try:
