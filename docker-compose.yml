@@ -12,6 +12,7 @@ services:
       - '127.0.0.1:8080:8080'
     volumes:
       - ./locales:/app/locales
+      - ./banners:/app/banners:ro
     restart: unless-stopped
     depends_on:
       remnawave-tg-shop-db:
