@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Optional
 
 from aiogram import types
-from aiogram.types import FSInputFile, InlineKeyboardMarkup
+from aiogram.types import FSInputFile, InlineKeyboardMarkup, InputMediaPhoto
 
 from config.settings import Settings
 
@@ -35,26 +35,50 @@ async def send_menu_with_optional_banner(
     banner_path = find_banner_path(settings, menu_key)
     if not banner_path or len(text) > _MAX_TELEGRAM_CAPTION_LENGTH:
         if is_edit:
-            await target_message_obj.edit_text(text, reply_markup=reply_markup)
-        else:
-            await target_message_obj.answer(text, reply_markup=reply_markup)
+            try:
+                await target_message_obj.edit_text(text, reply_markup=reply_markup)
+                return
+            except Exception:
+                await target_message_obj.answer(text, reply_markup=reply_markup)
+                return
+        await target_message_obj.answer(text, reply_markup=reply_markup)
         return
 
+    if is_edit:
+        try:
+            await target_message_obj.edit_media(
+                media=InputMediaPhoto(media=FSInputFile(str(banner_path)), caption=text),
+                reply_markup=reply_markup,
+            )
+            return
+        except Exception:
+            try:
+                await target_message_obj.edit_caption(caption=text, reply_markup=reply_markup)
+                return
+            except Exception:
+                try:
+                    await target_message_obj.edit_text(text, reply_markup=reply_markup)
+                    return
+                except Exception:
+                    pass
+
+        try:
+            await target_message_obj.answer_photo(
+                photo=FSInputFile(str(banner_path)),
+                caption=text,
+                reply_markup=reply_markup,
+            )
+            return
+        except Exception:
+            await target_message_obj.answer(text, reply_markup=reply_markup)
+            return
+
+
     try:
-        sent_photo_message = await target_message_obj.answer_photo(
+        await target_message_obj.answer_photo(
             photo=FSInputFile(str(banner_path)),
             caption=text,
             reply_markup=reply_markup,
         )
     except Exception:
-        if is_edit:
-            await target_message_obj.edit_text(text, reply_markup=reply_markup)
-        else:
-            await target_message_obj.answer(text, reply_markup=reply_markup)
-        return
-
-    if is_edit and sent_photo_message:
-        try:
-            await target_message_obj.delete()
-        except Exception:
-            pass
+        await target_message_obj.answer(text, reply_markup=reply_markup)
