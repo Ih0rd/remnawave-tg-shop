@@ -571,5 +571,6 @@
   "admin_user_ip_control_loading_toast": "⏳ Requesting IP data, this may take up to 20 seconds...",
   "admin_user_ip_control_refresh_button": "🔄 Refresh IP-control",
   "tblocker_ban_notification": "🚫 <b>Access temporarily restricted</b>\n\nWe detected disallowed traffic via host <b>{host_name}</b>.\nUser IP: <code>{ip}</code>\nBlock duration: <b>{block_duration_minutes}</b> min.\nPlanned unblock at: <b>{will_unblock_at}</b>",
-  "tblocker_unban_notification": "✅ <b>Restriction lifted</b>\n\nAccess has been restored.\nHost: <b>{host_name}</b>\nUser IP: <code>{ip}</code>"
+  "tblocker_unban_notification": "✅ <b>Restriction lifted</b>\n\nAccess has been restored.\nHost: <b>{host_name}</b>\nUser IP: <code>{ip}</code>",
+  "pay_with_rollypay_button": "💳 RollyPay (SBP/Cards)"
 }

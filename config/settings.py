@@ -82,6 +82,18 @@ class Settings(BaseSettings):
         description="Lifetime of the payment link in minutes (30-4320, defaults to provider value)",
     )
 
+
+    ROLLYPAY_ENABLED: bool = Field(default=False)
+    ROLLYPAY_BASE_URL: str = Field(default="https://rollypay.io")
+    ROLLYPAY_API_KEY: Optional[str] = None
+    ROLLYPAY_SIGNING_SECRET: Optional[str] = None
+    ROLLYPAY_PAYMENT_METHOD: Optional[str] = Field(
+        default=None,
+        description="Optional payment method hint for RollyPay (e.g. sbp, card). Leave empty to let user choose on provider page.",
+    )
+    ROLLYPAY_RETURN_URL: Optional[str] = Field(default=None)
+    ROLLYPAY_FAILED_URL: Optional[str] = Field(default=None)
+
     OXAPAY_ENABLED: bool = Field(default=False)
     OXAPAY_MERCHANT_API_KEY: Optional[str] = None
     OXAPAY_BASE_URL: str = Field(default="https://api.oxapay.com/v1")
@@ -434,6 +446,19 @@ class Settings(BaseSettings):
 
     @computed_field
     @property
+    def rollypay_webhook_path(self) -> str:
+        return "/webhook/rollypay"
+
+    @computed_field
+    @property
+    def rollypay_full_webhook_url(self) -> Optional[str]:
+        base = self.WEBHOOK_BASE_URL
+        if base:
+            return f"{base.rstrip('/')}{self.rollypay_webhook_path}"
+        return None
+
+    @computed_field
+    @property
     def oxapay_full_webhook_url(self) -> Optional[str]:
         base = self.WEBHOOK_BASE_URL
         if base:
@@ -623,6 +648,7 @@ class Settings(BaseSettings):
             "freekassa",
             "platega",
             "severpay",
+            "rollypay",
             "yookassa",
             "tribute",
             "stars",
@@ -655,6 +681,7 @@ class Settings(BaseSettings):
         'PLATEGA_RETURN_URL',
         'PLATEGA_FAILED_URL',
         'SEVERPAY_RETURN_URL',
+        'ROLLYPAY_RETURN_URL', 'ROLLYPAY_FAILED_URL',
         'OXAPAY_RETURN_URL',
         'SQUAD_UPGRADE_TRIBUTE_LINK',
         'SQUAD_UPGRADE_TARGET_UUID',
@@ -763,6 +790,16 @@ def get_settings() -> Settings:
                 if not _settings_instance.SEVERPAY_MID or not _settings_instance.SEVERPAY_TOKEN:
                     logging.warning(
                         "CRITICAL: SeverPay is enabled but MID or TOKEN is missing. SeverPay payments will not work."
+                    )
+
+            if _settings_instance.ROLLYPAY_ENABLED:
+                if not _settings_instance.ROLLYPAY_API_KEY:
+                    logging.warning(
+                        "CRITICAL: RollyPay is enabled but API key is missing. RollyPay payments will not work."
+                    )
+                if _settings_instance.ROLLYPAY_PAYMENT_METHOD and _settings_instance.ROLLYPAY_PAYMENT_METHOD.lower() not in {"sbp", "card"}:
+                    logging.warning(
+                        "WARNING: ROLLYPAY_PAYMENT_METHOD should be 'sbp' or 'card'. Unknown value will be ignored."
                     )
 
         except ValidationError as e:
