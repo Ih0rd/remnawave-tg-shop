@@ -7,6 +7,7 @@ from aiogram.types import FSInputFile, InlineKeyboardMarkup
 from config.settings import Settings
 
 _ALLOWED_EXTENSIONS = ("jpg", "jpeg", "png", "gif", "webp")
+_MAX_TELEGRAM_CAPTION_LENGTH = 1024
 
 
 def _resolve_banners_dir(settings: Settings) -> Path:
@@ -32,16 +33,28 @@ async def send_menu_with_optional_banner(
     is_edit: bool = False,
 ):
     banner_path = find_banner_path(settings, menu_key)
-    if banner_path:
-        if is_edit:
-            await target_message_obj.delete()
-        await target_message_obj.answer_photo(
-            photo=FSInputFile(str(banner_path)),
-            caption=text,
-            reply_markup=reply_markup,
-        )
-    else:
+    if not banner_path or len(text) > _MAX_TELEGRAM_CAPTION_LENGTH:
         if is_edit:
             await target_message_obj.edit_text(text, reply_markup=reply_markup)
         else:
             await target_message_obj.answer(text, reply_markup=reply_markup)
+        return
+
+    try:
+        sent_photo_message = await target_message_obj.answer_photo(
+            photo=FSInputFile(str(banner_path)),
+            caption=text,
+            reply_markup=reply_markup,
+        )
+    except Exception:
+        if is_edit:
+            await target_message_obj.edit_text(text, reply_markup=reply_markup)
+        else:
+            await target_message_obj.answer(text, reply_markup=reply_markup)
+        return
+
+    if is_edit and sent_photo_message:
+        try:
+            await target_message_obj.delete()
+        except Exception:
+            pass
