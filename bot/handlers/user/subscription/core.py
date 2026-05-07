@@ -737,6 +737,11 @@ async def addon_payment_methods_menu(
                 text=get_text("pay_with_platega_button"),
                 callback_data=f"pay_platega_addon:{package_key}:{months}:{rub_price}",
             )])
+        elif method == "rollypay" and settings.ROLLYPAY_ENABLED and rub_price is not None:
+            rows.append([InlineKeyboardButton(
+                text=get_text("pay_with_rollypay_button"),
+                callback_data=f"pay_rollypay_addon:{package_key}:{months}:{rub_price}",
+            )])
         elif method == "yookassa" and settings.YOOKASSA_ENABLED and rub_price is not None:
             rows.append([InlineKeyboardButton(
                 text=get_text("pay_with_yookassa_button"),
@@ -841,6 +846,11 @@ async def squad_upgrade_payment_methods_menu(
             rows.append([InlineKeyboardButton(
                 text=get_text("pay_with_platega_button"),
                 callback_data=f"pay_platega_upgrade:{months}:{rub_price}",
+            )])
+        elif method == "rollypay" and settings.ROLLYPAY_ENABLED and rub_price is not None:
+            rows.append([InlineKeyboardButton(
+                text=get_text("pay_with_rollypay_button"),
+                callback_data=f"pay_rollypay_upgrade:{months}:{rub_price}",
             )])
         elif method == "yookassa" and settings.YOOKASSA_ENABLED and rub_price is not None:
             rows.append([InlineKeyboardButton(

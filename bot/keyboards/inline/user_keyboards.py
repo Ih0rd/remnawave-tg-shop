@@ -135,6 +135,11 @@ def get_payment_method_keyboard(months: int, price: float,
                 text=_("pay_with_platega_button"),
                 callback_data=f"pay_platega:{months}:{price}",
             )
+        elif method == "rollypay" and settings.ROLLYPAY_ENABLED:
+            builder.button(
+                text=_("pay_with_rollypay_button"),
+                callback_data=f"pay_rollypay:{months}:{price}",
+            )
         elif method == "yookassa" and settings.YOOKASSA_ENABLED:
             builder.button(
                 text=_("pay_with_yookassa_button"),

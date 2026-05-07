@@ -80,7 +80,7 @@
     | `WEBHOOK_BASE_URL`| **Обязательно.** Базовый URL для вебхуков, например `https://your.domain.com`. |
     | `WEB_SERVER_HOST` | Хост для веб-сервера. | `0.0.0.0` |
     | `WEB_SERVER_PORT` | Порт для веб-сервера. | `8080` |
-    | `PAYMENT_METHODS_ORDER` | (Опционально) Порядок отображения кнопок оплаты через запятую. Поддерживаемые ключи: `severpay`, `freekassa`, `platega`, `yookassa`, `tribute`, `stars`, `oxapay`, `cryptopay`. Первый будет сверху. |
+    | `PAYMENT_METHODS_ORDER` | (Опционально) Порядок отображения кнопок оплаты через запятую. Поддерживаемые ключи: `severpay`, `rollypay`, `freekassa`, `platega`, `yookassa`, `tribute`, `stars`, `oxapay`, `cryptopay`. Первый будет сверху. |
     | `YOOKASSA_ENABLED` | Включить/выключить YooKassa (`true`/`false`). |
     | `YOOKASSA_SHOP_ID` | ID вашего магазина в YooKassa. |
     | `YOOKASSA_SECRET_KEY`| Секретный ключ магазина YooKassa. |
@@ -109,6 +109,13 @@
     | `SEVERPAY_BASE_URL` | (Опционально) Базовый URL API SeverPay. По умолчанию `https://severpay.io/api/merchant`. |
     | `SEVERPAY_RETURN_URL` | (Опционально) URL редиректа после оплаты (по умолчанию ссылка на бота). |
     | `SEVERPAY_LIFETIME_MINUTES` | (Опционально) Время жизни платежной ссылки в минутах (30–4320). |
+    | `ROLLYPAY_ENABLED` | Включить/выключить RollyPay (`true`/`false`). |
+    | `ROLLYPAY_API_KEY` | API ключ из кабинета RollyPay. |
+    | `ROLLYPAY_SIGNING_SECRET` | (Опционально) секрет для проверки подписи webhook. |
+    | `ROLLYPAY_PAYMENT_METHOD` | (Опционально) Принудительный метод в RollyPay (`sbp` или `card`, если поддерживается вашим мерчантом). Если пусто — пользователь выбирает метод на странице оплаты RollyPay. |
+    | `ROLLYPAY_BASE_URL` | (Опционально) Базовый URL API RollyPay. По умолчанию `https://rollypay.io`. |
+    | `ROLLYPAY_RETURN_URL` | (Опционально) URL редиректа после оплаты. По умолчанию ссылка на бота. |
+    | `ROLLYPAY_FAILED_URL` | (Опционально) URL редиректа при отмене/ошибке. По умолчанию как `ROLLYPAY_RETURN_URL`. |
     | `OXAPAY_ENABLED` | Включить/выключить OxaPay (`true`/`false`). |
     | `OXAPAY_MERCHANT_API_KEY` | Merchant API key из кабинета OxaPay (используется для создания инвойса и проверки подписи webhook). |
     | `OXAPAY_BASE_URL` | (Опционально) Базовый URL API OxaPay. По умолчанию `https://api.oxapay.com/v1`. |
@@ -171,6 +178,7 @@
     -   `https://<ваш_домен>/webhook/freekassa` → `http://remnawave-tg-shop:<WEB_SERVER_PORT>/webhook/freekassa`
     -   `https://<ваш_домен>/webhook/platega` → `http://remnawave-tg-shop:<WEB_SERVER_PORT>/webhook/platega`
     -   `https://<ваш_домен>/webhook/severpay` → `http://remnawave-tg-shop:<WEB_SERVER_PORT>/webhook/severpay`
+    -   `https://<ваш_домен>/webhook/rollypay` → `http://remnawave-tg-shop:<WEB_SERVER_PORT>/webhook/rollypay`
     -   `https://<ваш_домен>/webhook/oxapay` → `http://remnawave-tg-shop:<WEB_SERVER_PORT>/webhook/oxapay`
     -   `https://<ваш_домен>/webhook/cryptopay` → `http://remnawave-tg-shop:<WEB_SERVER_PORT>/webhook/cryptopay`
     -   `https://<ваш_домен>/webhook/tribute` → `http://remnawave-tg-shop:<WEB_SERVER_PORT>/webhook/tribute`
