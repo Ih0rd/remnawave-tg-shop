@@ -62,7 +62,7 @@
   "hwid_limit_reason_hwidnotsupported": "ℹ️ Для этого подключения привязка устройства (HWID) не поддерживается. Названия устройств могут быть ограничены.",
   "device_disconnected": "Устройство успешно отключено.",
   "no_devices_found": "Ошибка загрузки списка устройств.",
-  "devices_unlimited_label": "Без ограничений",
+  "devices_unlimited_label": "∞",
   "my_devices_feature_disabled": "Раздел \"Мои устройства\" сейчас недоступен.",
   "cancel_button": "❌ Отмена",
   "payment_description_subscription": "Оплата подписки на {months} мес.",
